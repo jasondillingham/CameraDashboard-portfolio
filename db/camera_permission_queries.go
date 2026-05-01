@@ -14,7 +14,7 @@ var (
 	camPresetPermCacheStore = newCache(30*time.Second, loadCamPresetPermissions)
 )
 
-// InitCameraPermissionTables creates cmscams_camera_permissions and cmscams_preset_permissions tables
+// InitCameraPermissionTables creates cd_camera_permissions and cd_preset_permissions tables
 func InitCameraPermissionTables() error {
 	if sqliteDB == nil {
 		return fmt.Errorf("SQLite database not connected")
@@ -41,7 +41,7 @@ func loadCamPermissions() (map[string]map[string]map[int]bool, error) {
 
 	rows, err := sqliteDB.QueryContext(ctx, `
 		SELECT user_id, nvr_id, channel
-		FROM cmscams_camera_permissions
+		FROM cd_camera_permissions
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load camera permissions: %w", err)
@@ -82,7 +82,7 @@ func loadCamPresetPermissions() (map[string]map[string]bool, error) {
 
 	rows, err := sqliteDB.QueryContext(ctx, `
 		SELECT user_id, preset_id
-		FROM cmscams_preset_permissions
+		FROM cd_preset_permissions
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load camera preset permissions: %w", err)
@@ -201,7 +201,7 @@ func GrantCameraPermission(userID, nvrID string, channel int) error {
 	defer cancel()
 
 	_, err := sqliteDB.ExecContext(ctx, `
-		INSERT OR IGNORE INTO cmscams_camera_permissions (user_id, nvr_id, channel)
+		INSERT OR IGNORE INTO cd_camera_permissions (user_id, nvr_id, channel)
 		VALUES (?, ?, ?)
 	`, strings.ToLower(userID), nvrID, channel)
 	if err != nil {
@@ -225,11 +225,11 @@ func RevokeCameraPermission(userID, nvrID string, channel int) error {
 	if channel == 0 {
 		// Revoking "all cameras" should also clear individual channel grants
 		_, err = sqliteDB.ExecContext(ctx, `
-			DELETE FROM cmscams_camera_permissions WHERE user_id = ? AND nvr_id = ?
+			DELETE FROM cd_camera_permissions WHERE user_id = ? AND nvr_id = ?
 		`, strings.ToLower(userID), nvrID)
 	} else {
 		_, err = sqliteDB.ExecContext(ctx, `
-			DELETE FROM cmscams_camera_permissions WHERE user_id = ? AND nvr_id = ? AND channel = ?
+			DELETE FROM cd_camera_permissions WHERE user_id = ? AND nvr_id = ? AND channel = ?
 		`, strings.ToLower(userID), nvrID, channel)
 	}
 	if err != nil {
@@ -256,7 +256,7 @@ func GrantAllNVRs(userID string, nvrIDs []string) error {
 
 	for _, nvrID := range nvrIDs {
 		_, err := tx.ExecContext(ctx, `
-			INSERT OR IGNORE INTO cmscams_camera_permissions (user_id, nvr_id, channel)
+			INSERT OR IGNORE INTO cd_camera_permissions (user_id, nvr_id, channel)
 			VALUES (?, ?, 0)
 		`, strings.ToLower(userID), nvrID)
 		if err != nil {
@@ -282,10 +282,10 @@ func RevokeAllCameraPermissions(userID string) error {
 	defer cancel()
 
 	uid := strings.ToLower(userID)
-	if _, err := sqliteDB.ExecContext(ctx, `DELETE FROM cmscams_camera_permissions WHERE user_id = ?`, uid); err != nil {
+	if _, err := sqliteDB.ExecContext(ctx, `DELETE FROM cd_camera_permissions WHERE user_id = ?`, uid); err != nil {
 		return fmt.Errorf("failed to revoke all camera permissions: %w", err)
 	}
-	if _, err := sqliteDB.ExecContext(ctx, `DELETE FROM cmscams_preset_permissions WHERE user_id = ?`, uid); err != nil {
+	if _, err := sqliteDB.ExecContext(ctx, `DELETE FROM cd_preset_permissions WHERE user_id = ?`, uid); err != nil {
 		return fmt.Errorf("failed to revoke all preset permissions: %w", err)
 	}
 	invalidateCamPermCache()
@@ -302,7 +302,7 @@ func GrantPresetPermission(userID, presetID string) error {
 	defer cancel()
 
 	_, err := sqliteDB.ExecContext(ctx, `
-		INSERT OR IGNORE INTO cmscams_preset_permissions (user_id, preset_id)
+		INSERT OR IGNORE INTO cd_preset_permissions (user_id, preset_id)
 		VALUES (?, ?)
 	`, strings.ToLower(userID), presetID)
 	if err != nil {
@@ -322,7 +322,7 @@ func RevokePresetPermission(userID, presetID string) error {
 	defer cancel()
 
 	_, err := sqliteDB.ExecContext(ctx, `
-		DELETE FROM cmscams_preset_permissions WHERE user_id = ? AND preset_id = ?
+		DELETE FROM cd_preset_permissions WHERE user_id = ? AND preset_id = ?
 	`, strings.ToLower(userID), presetID)
 	if err != nil {
 		return fmt.Errorf("failed to revoke preset permission: %w", err)

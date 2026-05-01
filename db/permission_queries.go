@@ -11,7 +11,7 @@ import (
 // Permission cache with TTL
 var permCacheStore = newCache(30*time.Second, loadPermissions)
 
-// InitPermissionTables creates the cmscams_permissions table if it doesn't exist
+// InitPermissionTables creates the cd_permissions table if it doesn't exist
 func InitPermissionTables() error {
 	if sqliteDB == nil {
 		return fmt.Errorf("SQLite database not connected")
@@ -32,7 +32,7 @@ func loadPermissions() (map[string]map[string]bool, error) {
 
 	rows, err := sqliteDB.QueryContext(ctx, `
 		SELECT user_id, dashboard_slug
-		FROM cmscams_permissions
+		FROM cd_permissions
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load permissions: %w", err)
@@ -68,7 +68,7 @@ func GetUsersWithPermission(slug string) ([]string, error) {
 	defer cancel()
 
 	rows, err := sqliteDB.QueryContext(ctx, `
-		SELECT LOWER(user_id) FROM cmscams_permissions
+		SELECT LOWER(user_id) FROM cd_permissions
 		WHERE dashboard_slug = ?
 	`, slug)
 	if err != nil {
@@ -124,7 +124,7 @@ func GrantPermission(userID, slug, grantedBy string) error {
 	defer cancel()
 
 	_, err := sqliteDB.ExecContext(ctx, `
-		INSERT OR IGNORE INTO cmscams_permissions (user_id, dashboard_slug, granted_by)
+		INSERT OR IGNORE INTO cd_permissions (user_id, dashboard_slug, granted_by)
 		VALUES (?, ?, ?)
 	`, strings.ToLower(userID), slug, grantedBy)
 	if err != nil {
@@ -145,7 +145,7 @@ func RevokePermission(userID, slug string) error {
 	defer cancel()
 
 	_, err := sqliteDB.ExecContext(ctx, `
-		DELETE FROM cmscams_permissions WHERE user_id = ? AND dashboard_slug = ?
+		DELETE FROM cd_permissions WHERE user_id = ? AND dashboard_slug = ?
 	`, strings.ToLower(userID), slug)
 	if err != nil {
 		return fmt.Errorf("failed to revoke permission: %w", err)
@@ -172,7 +172,7 @@ func GrantAllPermissions(userID string, slugs []string, grantedBy string) error 
 
 	for _, slug := range slugs {
 		_, err := tx.ExecContext(ctx, `
-			INSERT OR IGNORE INTO cmscams_permissions (user_id, dashboard_slug, granted_by)
+			INSERT OR IGNORE INTO cd_permissions (user_id, dashboard_slug, granted_by)
 			VALUES (?, ?, ?)
 		`, strings.ToLower(userID), slug, grantedBy)
 		if err != nil {
@@ -198,7 +198,7 @@ func RevokeAllPermissions(userID string) error {
 	defer cancel()
 
 	_, err := sqliteDB.ExecContext(ctx, `
-		DELETE FROM cmscams_permissions WHERE user_id = ?
+		DELETE FROM cd_permissions WHERE user_id = ?
 	`, strings.ToLower(userID))
 	if err != nil {
 		return fmt.Errorf("failed to revoke all permissions: %w", err)

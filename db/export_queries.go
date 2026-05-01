@@ -9,7 +9,7 @@ import (
 	"cameradashboard/models"
 )
 
-// InitExportTables creates the cmscams_export_queue table if it doesn't exist
+// InitExportTables creates the cd_export_queue table if it doesn't exist
 func InitExportTables() error {
 	if sqliteDB == nil {
 		return fmt.Errorf("SQLite database not connected")
@@ -29,7 +29,7 @@ func InsertExportJob(job *models.ExportJob) error {
 	defer cancel()
 
 	_, err := sqliteDB.ExecContext(ctx, `
-		INSERT INTO cmscams_export_queue
+		INSERT INTO cd_export_queue
 			(job_uid, nvr_id, channel, camera_name, nvr_name, start_time, end_time, quality, status, requested_by, export_name)
 		VALUES
 			(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -57,7 +57,7 @@ func GetExportJobByUID(uid string) (*models.ExportJob, error) {
 			start_time, end_time, quality, status, progress,
 			file_path, file_name, file_size, error_msg, share_link,
 			requested_by, created_at, updated_at, completed_at, export_name
-		FROM cmscams_export_queue
+		FROM cd_export_queue
 		WHERE job_uid = ?
 	`, uid).Scan(
 		&job.ID, &job.JobUID, &job.NVRID, &job.Channel, &job.CameraName, &job.NVRName,
@@ -113,7 +113,7 @@ func GetExportJobsByUser(username string, limit int) ([]models.ExportJob, error)
 			start_time, end_time, quality, status, progress,
 			file_path, file_name, file_size, error_msg, share_link,
 			requested_by, created_at, updated_at, completed_at, export_name
-		FROM cmscams_export_queue
+		FROM cd_export_queue
 		WHERE requested_by = ?
 		ORDER BY created_at DESC
 		LIMIT ?
@@ -144,7 +144,7 @@ func GetAllExportJobs(limit int) ([]models.ExportJob, error) {
 			start_time, end_time, quality, status, progress,
 			file_path, file_name, file_size, error_msg, share_link,
 			requested_by, created_at, updated_at, completed_at, export_name
-		FROM cmscams_export_queue
+		FROM cd_export_queue
 		ORDER BY created_at DESC
 		LIMIT ?
 	`, limit)
@@ -174,10 +174,10 @@ func GetNextQueuedJob() (*models.ExportJob, error) {
 			start_time, end_time, quality, status, progress,
 			file_path, file_name, file_size, error_msg, share_link,
 			requested_by, created_at, updated_at, completed_at, export_name
-		FROM cmscams_export_queue
+		FROM cd_export_queue
 		WHERE status = 'queued'
 		AND nvr_id NOT IN (
-			SELECT DISTINCT nvr_id FROM cmscams_export_queue
+			SELECT DISTINCT nvr_id FROM cd_export_queue
 			WHERE status IN ('downloading', 'encoding', 'uploading', 'processing')
 		)
 		ORDER BY created_at ASC
@@ -236,7 +236,7 @@ func UpdateExportJobStatus(uid, status string, progress int, fileSize int64, err
 	}
 
 	_, err := sqliteDB.ExecContext(ctx, `
-		UPDATE cmscams_export_queue
+		UPDATE cd_export_queue
 		SET status = ?, progress = ?, file_size = ?, error_msg = ?,
 			updated_at = datetime('now'), completed_at = ?
 		WHERE job_uid = ?
@@ -254,7 +254,7 @@ func UpdateExportJobFile(uid, filePath, fileName string) error {
 	defer cancel()
 
 	_, err := sqliteDB.ExecContext(ctx, `
-		UPDATE cmscams_export_queue
+		UPDATE cd_export_queue
 		SET file_path = ?, file_name = ?, updated_at = datetime('now')
 		WHERE job_uid = ?
 	`, filePath, fileName, uid)
@@ -271,7 +271,7 @@ func UpdateExportJobShareLink(uid, shareLink string) error {
 	defer cancel()
 
 	_, err := sqliteDB.ExecContext(ctx, `
-		UPDATE cmscams_export_queue
+		UPDATE cd_export_queue
 		SET share_link = ?, updated_at = datetime('now')
 		WHERE job_uid = ?
 	`, shareLink, uid)
@@ -289,7 +289,7 @@ func CountQueuedExportJobs() (int, error) {
 
 	var count int
 	err := sqliteDB.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM cmscams_export_queue
+		SELECT COUNT(*) FROM cd_export_queue
 		WHERE status = 'queued'
 	`).Scan(&count)
 	return count, err
@@ -306,7 +306,7 @@ func CountActiveExportJobs() (int, error) {
 
 	var count int
 	err := sqliteDB.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM cmscams_export_queue
+		SELECT COUNT(*) FROM cd_export_queue
 		WHERE status IN ('downloading', 'encoding', 'uploading', 'processing')
 	`).Scan(&count)
 	return count, err
@@ -326,7 +326,7 @@ func CleanupOldExportJobs(olderThanHours int) ([]string, error) {
 
 	// First get file paths for jobs we're about to delete
 	rows, err := sqliteDB.QueryContext(ctx, `
-		SELECT file_path FROM cmscams_export_queue
+		SELECT file_path FROM cd_export_queue
 		WHERE status IN ('complete', 'failed')
 		AND completed_at IS NOT NULL
 		AND completed_at < ?
@@ -346,7 +346,7 @@ func CleanupOldExportJobs(olderThanHours int) ([]string, error) {
 
 	// Delete the jobs
 	_, err = sqliteDB.ExecContext(ctx, `
-		DELETE FROM cmscams_export_queue
+		DELETE FROM cd_export_queue
 		WHERE status IN ('complete', 'failed')
 		AND completed_at IS NOT NULL
 		AND completed_at < ?
@@ -366,9 +366,9 @@ func DeleteExportJob(uid string) (string, error) {
 
 	// Get file path before deleting
 	var fp sql.NullString
-	sqliteDB.QueryRowContext(ctx, `SELECT file_path FROM cmscams_export_queue WHERE job_uid = ?`, uid).Scan(&fp)
+	sqliteDB.QueryRowContext(ctx, `SELECT file_path FROM cd_export_queue WHERE job_uid = ?`, uid).Scan(&fp)
 
-	_, err := sqliteDB.ExecContext(ctx, `DELETE FROM cmscams_export_queue WHERE job_uid = ?`, uid)
+	_, err := sqliteDB.ExecContext(ctx, `DELETE FROM cd_export_queue WHERE job_uid = ?`, uid)
 	if err != nil {
 		return "", err
 	}
@@ -389,7 +389,7 @@ func PurgeCompletedExportJobs() ([]string, error) {
 	defer cancel()
 
 	rows, err := sqliteDB.QueryContext(ctx, `
-		SELECT file_path FROM cmscams_export_queue
+		SELECT file_path FROM cd_export_queue
 		WHERE status IN ('complete', 'failed')
 	`)
 	if err != nil {
@@ -406,7 +406,7 @@ func PurgeCompletedExportJobs() ([]string, error) {
 	}
 
 	_, err = sqliteDB.ExecContext(ctx, `
-		DELETE FROM cmscams_export_queue
+		DELETE FROM cd_export_queue
 		WHERE status IN ('complete', 'failed')
 	`)
 
@@ -425,11 +425,11 @@ func ResetExportJobForRetry(uid string) error {
 
 	// Log current state before update
 	var currentStatus string
-	sqliteDB.QueryRowContext(ctx, `SELECT status FROM cmscams_export_queue WHERE job_uid = ?`, uid).Scan(&currentStatus)
+	sqliteDB.QueryRowContext(ctx, `SELECT status FROM cd_export_queue WHERE job_uid = ?`, uid).Scan(&currentStatus)
 	log.Printf("Camera Export: ResetForRetry uid=%s currentStatus=%s", uid, currentStatus)
 
 	result, err := sqliteDB.ExecContext(ctx, `
-		UPDATE cmscams_export_queue
+		UPDATE cd_export_queue
 		SET status = 'queued', progress = 0, file_size = 0, error_msg = '',
 			file_path = '', file_name = '', share_link = '',
 			completed_at = NULL, updated_at = datetime('now')
@@ -444,7 +444,7 @@ func ResetExportJobForRetry(uid string) error {
 
 	// Verify the update actually took effect
 	var newStatus string
-	sqliteDB.QueryRowContext(ctx, `SELECT status FROM cmscams_export_queue WHERE job_uid = ?`, uid).Scan(&newStatus)
+	sqliteDB.QueryRowContext(ctx, `SELECT status FROM cd_export_queue WHERE job_uid = ?`, uid).Scan(&newStatus)
 	log.Printf("Camera Export: ResetForRetry uid=%s newStatus=%s", uid, newStatus)
 
 	if newStatus != "queued" {
@@ -465,7 +465,7 @@ func ResetStuckExportJobs() (int64, error) {
 	defer cancel()
 
 	result, err := sqliteDB.ExecContext(ctx, `
-		UPDATE cmscams_export_queue
+		UPDATE cd_export_queue
 		SET status = 'queued', progress = 0, updated_at = datetime('now')
 		WHERE status IN ('downloading', 'encoding', 'uploading', 'processing')
 	`)

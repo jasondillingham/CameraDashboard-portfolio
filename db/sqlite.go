@@ -77,19 +77,19 @@ func InitSQLiteTables() error {
 
 func initSessionsTableSQLite() error {
 	_, err := sqliteDB.Exec(`
-		CREATE TABLE IF NOT EXISTS cmscams_sessions (
+		CREATE TABLE IF NOT EXISTS cd_sessions (
 			token  TEXT PRIMARY KEY,
 			data   BLOB NOT NULL,
 			expiry TEXT NOT NULL
 		);
-		CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON cmscams_sessions(expiry);
+		CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON cd_sessions(expiry);
 	`)
 	return err
 }
 
 func initAdminTablesSQLite() error {
 	_, err := sqliteDB.Exec(`
-		CREATE TABLE IF NOT EXISTS cmscams_access_logs (
+		CREATE TABLE IF NOT EXISTS cd_access_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id TEXT NOT NULL,
 			user_name TEXT,
@@ -100,11 +100,11 @@ func initAdminTablesSQLite() error {
 			user_agent TEXT,
 			timestamp TEXT NOT NULL DEFAULT (datetime('now'))
 		);
-		CREATE INDEX IF NOT EXISTS idx_access_logs_timestamp ON cmscams_access_logs(timestamp);
-		CREATE INDEX IF NOT EXISTS idx_access_logs_user_id ON cmscams_access_logs(user_id);
-		CREATE INDEX IF NOT EXISTS idx_access_logs_path ON cmscams_access_logs(path);
+		CREATE INDEX IF NOT EXISTS idx_access_logs_timestamp ON cd_access_logs(timestamp);
+		CREATE INDEX IF NOT EXISTS idx_access_logs_user_id ON cd_access_logs(user_id);
+		CREATE INDEX IF NOT EXISTS idx_access_logs_path ON cd_access_logs(path);
 
-		CREATE TABLE IF NOT EXISTS cmscams_active_sessions (
+		CREATE TABLE IF NOT EXISTS cd_active_sessions (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			session_token TEXT NOT NULL UNIQUE,
 			user_id TEXT NOT NULL,
@@ -116,15 +116,15 @@ func initAdminTablesSQLite() error {
 			last_activity TEXT NOT NULL DEFAULT (datetime('now')),
 			created_at TEXT NOT NULL DEFAULT (datetime('now'))
 		);
-		CREATE INDEX IF NOT EXISTS idx_active_sessions_last_activity ON cmscams_active_sessions(last_activity);
-		CREATE INDEX IF NOT EXISTS idx_active_sessions_user_id ON cmscams_active_sessions(user_id);
+		CREATE INDEX IF NOT EXISTS idx_active_sessions_last_activity ON cd_active_sessions(last_activity);
+		CREATE INDEX IF NOT EXISTS idx_active_sessions_user_id ON cd_active_sessions(user_id);
 	`)
 	return err
 }
 
 func initPermissionTablesSQLite() error {
 	_, err := sqliteDB.Exec(`
-		CREATE TABLE IF NOT EXISTS cmscams_permissions (
+		CREATE TABLE IF NOT EXISTS cd_permissions (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id TEXT NOT NULL,
 			dashboard_slug TEXT NOT NULL,
@@ -132,37 +132,37 @@ func initPermissionTablesSQLite() error {
 			granted_at TEXT NOT NULL DEFAULT (datetime('now')),
 			UNIQUE (user_id, dashboard_slug)
 		);
-		CREATE INDEX IF NOT EXISTS idx_perms_user ON cmscams_permissions(user_id);
-		CREATE INDEX IF NOT EXISTS idx_perms_slug ON cmscams_permissions(dashboard_slug);
+		CREATE INDEX IF NOT EXISTS idx_perms_user ON cd_permissions(user_id);
+		CREATE INDEX IF NOT EXISTS idx_perms_slug ON cd_permissions(dashboard_slug);
 	`)
 	return err
 }
 
 func initCameraPermissionTablesSQLite() error {
 	_, err := sqliteDB.Exec(`
-		CREATE TABLE IF NOT EXISTS cmscams_camera_permissions (
+		CREATE TABLE IF NOT EXISTS cd_camera_permissions (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id TEXT NOT NULL,
 			nvr_id TEXT NOT NULL,
 			channel INTEGER NOT NULL DEFAULT 0,
 			UNIQUE (user_id, nvr_id, channel)
 		);
-		CREATE INDEX IF NOT EXISTS idx_cam_perm_user ON cmscams_camera_permissions(user_id);
+		CREATE INDEX IF NOT EXISTS idx_cam_perm_user ON cd_camera_permissions(user_id);
 
-		CREATE TABLE IF NOT EXISTS cmscams_preset_permissions (
+		CREATE TABLE IF NOT EXISTS cd_preset_permissions (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id TEXT NOT NULL,
 			preset_id TEXT NOT NULL,
 			UNIQUE (user_id, preset_id)
 		);
-		CREATE INDEX IF NOT EXISTS idx_cam_preset_perm_user ON cmscams_preset_permissions(user_id);
+		CREATE INDEX IF NOT EXISTS idx_cam_preset_perm_user ON cd_preset_permissions(user_id);
 	`)
 	return err
 }
 
 func initExportTablesSQLite() error {
 	_, err := sqliteDB.Exec(`
-		CREATE TABLE IF NOT EXISTS cmscams_export_queue (
+		CREATE TABLE IF NOT EXISTS cd_export_queue (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			job_uid TEXT NOT NULL UNIQUE,
 			nvr_id TEXT NOT NULL,
@@ -185,9 +185,9 @@ func initExportTablesSQLite() error {
 			updated_at TEXT NOT NULL DEFAULT (datetime('now')),
 			completed_at TEXT
 		);
-		CREATE INDEX IF NOT EXISTS idx_export_status ON cmscams_export_queue(status);
-		CREATE INDEX IF NOT EXISTS idx_export_user ON cmscams_export_queue(requested_by);
-		CREATE INDEX IF NOT EXISTS idx_export_created ON cmscams_export_queue(created_at);
+		CREATE INDEX IF NOT EXISTS idx_export_status ON cd_export_queue(status);
+		CREATE INDEX IF NOT EXISTS idx_export_user ON cd_export_queue(requested_by);
+		CREATE INDEX IF NOT EXISTS idx_export_created ON cd_export_queue(created_at);
 	`)
 	return err
 }

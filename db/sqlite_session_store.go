@@ -29,7 +29,7 @@ func NewSQLiteSessionStore(db *sql.DB, cleanupInterval time.Duration) *SQLiteSes
 func (s *SQLiteSessionStore) Find(token string) ([]byte, bool, error) {
 	var data []byte
 	err := s.db.QueryRowContext(context.Background(),
-		`SELECT data FROM cmscams_sessions WHERE token = ? AND julianday(expiry) > julianday('now')`,
+		`SELECT data FROM cd_sessions WHERE token = ? AND julianday(expiry) > julianday('now')`,
 		token,
 	).Scan(&data)
 	if err == sql.ErrNoRows {
@@ -44,7 +44,7 @@ func (s *SQLiteSessionStore) Find(token string) ([]byte, bool, error) {
 // Commit adds or updates a session.
 func (s *SQLiteSessionStore) Commit(token string, data []byte, expiry time.Time) error {
 	_, err := s.db.ExecContext(context.Background(),
-		`INSERT INTO cmscams_sessions (token, data, expiry) VALUES (?, ?, ?)
+		`INSERT INTO cd_sessions (token, data, expiry) VALUES (?, ?, ?)
 		 ON CONFLICT(token) DO UPDATE SET data = excluded.data, expiry = excluded.expiry`,
 		token, data, expiry.UTC().Format(time.RFC3339),
 	)
@@ -54,7 +54,7 @@ func (s *SQLiteSessionStore) Commit(token string, data []byte, expiry time.Time)
 // Delete removes a session token and data.
 func (s *SQLiteSessionStore) Delete(token string) error {
 	_, err := s.db.ExecContext(context.Background(),
-		`DELETE FROM cmscams_sessions WHERE token = ?`,
+		`DELETE FROM cd_sessions WHERE token = ?`,
 		token,
 	)
 	return err
@@ -67,7 +67,7 @@ func (s *SQLiteSessionStore) startCleanup(interval time.Duration) {
 		select {
 		case <-ticker.C:
 			_, err := s.db.ExecContext(context.Background(),
-				`DELETE FROM cmscams_sessions WHERE julianday(expiry) <= julianday('now')`,
+				`DELETE FROM cd_sessions WHERE julianday(expiry) <= julianday('now')`,
 			)
 			if err != nil {
 				log.Printf("SQLite session cleanup error: %v", err)

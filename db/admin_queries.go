@@ -31,9 +31,9 @@ func ClearAccessLogs() (int64, error) {
 
 	// Get count first
 	var count int64
-	sqliteDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM cmscams_access_logs").Scan(&count)
+	sqliteDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM cd_access_logs").Scan(&count)
 
-	_, err := sqliteDB.ExecContext(ctx, "DELETE FROM cmscams_access_logs")
+	_, err := sqliteDB.ExecContext(ctx, "DELETE FROM cd_access_logs")
 	if err != nil {
 		return 0, fmt.Errorf("failed to clear access logs: %w", err)
 	}
@@ -61,7 +61,7 @@ func InsertAccessLogBatch(logs []models.AccessLog) error {
 	defer tx.Rollback()
 
 	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO cmscams_access_logs (user_id, user_name, path, method, status_code, client_ip, user_agent)
+		INSERT INTO cd_access_logs (user_id, user_name, path, method, status_code, client_ip, user_agent)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
@@ -89,7 +89,7 @@ func UpsertActiveSession(session *models.ActiveSession) error {
 	defer cancel()
 
 	_, err := sqliteDB.ExecContext(ctx, `
-		INSERT INTO cmscams_active_sessions
+		INSERT INTO cd_active_sessions
 			(session_token, user_id, user_name, email, client_ip, user_agent, current_page, last_activity, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
 		ON CONFLICT(session_token) DO UPDATE SET
@@ -121,7 +121,7 @@ func GetActiveSessions(withinSeconds int) ([]models.ActiveSession, error) {
 		SELECT id, session_token, user_id, COALESCE(user_name, ''), COALESCE(email, ''),
 			   client_ip, COALESCE(user_agent, ''), COALESCE(current_page, ''),
 			   last_activity, created_at
-		FROM cmscams_active_sessions
+		FROM cd_active_sessions
 		WHERE last_activity > ?
 		ORDER BY last_activity DESC
 	`, cutoff)
@@ -180,7 +180,7 @@ func GetAccessLogs(userFilter, pathFilter string, dateFrom, dateTo *time.Time, p
 	whereClause := strings.Join(conditions, " AND ")
 
 	// Get total count
-	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM cmscams_access_logs WHERE %s`, whereClause)
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM cd_access_logs WHERE %s`, whereClause)
 	var total int
 	if err := sqliteDB.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("failed to count logs: %w", err)
@@ -193,7 +193,7 @@ func GetAccessLogs(userFilter, pathFilter string, dateFrom, dateTo *time.Time, p
 	query := fmt.Sprintf(`
 		SELECT id, user_id, COALESCE(user_name, ''), path, method, status_code,
 			   client_ip, COALESCE(user_agent, ''), timestamp
-		FROM cmscams_access_logs
+		FROM cd_access_logs
 		WHERE %s
 		ORDER BY timestamp DESC
 		LIMIT ? OFFSET ?
@@ -231,7 +231,7 @@ func GetDistinctLogUsers() ([]string, error) {
 	defer cancel()
 
 	rows, err := sqliteDB.QueryContext(ctx, `
-		SELECT DISTINCT user_id FROM cmscams_access_logs
+		SELECT DISTINCT user_id FROM cd_access_logs
 		WHERE user_id IS NOT NULL AND user_id != ''
 		ORDER BY user_id
 	`)
@@ -271,14 +271,14 @@ func GetAccessStats() (*models.AccessStats, error) {
 
 	// Today's views + unique users
 	sqliteDB.QueryRowContext(ctx, `
-		SELECT COUNT(*), COUNT(DISTINCT user_id) FROM cmscams_access_logs
+		SELECT COUNT(*), COUNT(DISTINCT user_id) FROM cd_access_logs
 		WHERE timestamp >= ?
 	`, todayStart).Scan(&stats.TodayViews, &stats.TodayUniqueUsers)
 
 	// Top dashboards today
 	rows, err := sqliteDB.QueryContext(ctx, `
 		SELECT path, COUNT(*) as cnt
-		FROM cmscams_access_logs
+		FROM cd_access_logs
 		WHERE timestamp >= ?
 		  AND path NOT LIKE '/api/%'
 		  AND path NOT LIKE '%/partial%'
@@ -299,7 +299,7 @@ func GetAccessStats() (*models.AccessStats, error) {
 	// Top users today
 	rows2, err := sqliteDB.QueryContext(ctx, `
 		SELECT user_id, MAX(COALESCE(user_name, user_id)) as user_name, COUNT(*) as cnt
-		FROM cmscams_access_logs
+		FROM cd_access_logs
 		WHERE timestamp >= ?
 		GROUP BY user_id
 		ORDER BY cnt DESC
@@ -335,7 +335,7 @@ func GetTodayUniqueUsers() ([]models.UniqueUserDetail, error) {
 		       COUNT(*) as page_views,
 		       MIN(timestamp) as first_seen,
 		       MAX(timestamp) as last_seen
-		FROM cmscams_access_logs
+		FROM cd_access_logs
 		WHERE timestamp >= ?
 		GROUP BY user_id
 		ORDER BY last_seen DESC
@@ -365,7 +365,7 @@ func InvalidateSession(sessionToken string) error {
 	ctx, cancel := queryContext()
 	defer cancel()
 
-	_, err := sqliteDB.ExecContext(ctx, `DELETE FROM cmscams_active_sessions WHERE session_token = ?`, sessionToken)
+	_, err := sqliteDB.ExecContext(ctx, `DELETE FROM cd_active_sessions WHERE session_token = ?`, sessionToken)
 	return err
 }
 
@@ -379,7 +379,7 @@ func CleanupStaleSessions(olderThanSeconds int) (int64, error) {
 	defer cancel()
 
 	cutoff := time.Now().UTC().Add(-time.Duration(olderThanSeconds) * time.Second).Format(time.RFC3339)
-	result, err := sqliteDB.ExecContext(ctx, `DELETE FROM cmscams_active_sessions WHERE last_activity < ?`, cutoff)
+	result, err := sqliteDB.ExecContext(ctx, `DELETE FROM cd_active_sessions WHERE last_activity < ?`, cutoff)
 	if err != nil {
 		return 0, err
 	}
@@ -396,10 +396,10 @@ func PurgeAllSessions() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if _, err := sqliteDB.ExecContext(ctx, `DELETE FROM cmscams_sessions`); err != nil {
+	if _, err := sqliteDB.ExecContext(ctx, `DELETE FROM cd_sessions`); err != nil {
 		return fmt.Errorf("failed to purge session store: %w", err)
 	}
-	if _, err := sqliteDB.ExecContext(ctx, `DELETE FROM cmscams_active_sessions`); err != nil {
+	if _, err := sqliteDB.ExecContext(ctx, `DELETE FROM cd_active_sessions`); err != nil {
 		return fmt.Errorf("failed to purge active sessions: %w", err)
 	}
 	return nil
@@ -418,7 +418,7 @@ func GetDistinctLogPaths() ([]string, error) {
 
 	rows, err := sqliteDB.QueryContext(ctx, `
 		SELECT DISTINCT path
-		FROM cmscams_access_logs
+		FROM cd_access_logs
 		WHERE timestamp > ?
 		  AND path NOT LIKE '/api/%'
 		  AND path NOT LIKE '%/partial%'
