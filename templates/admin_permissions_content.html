@@ -1,0 +1,327 @@
+{{define "admin_permissions_content.html"}}
+{{if .LDAPError}}
+<div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; color: #f87171; font-size: 0.9rem;">
+    <strong>Warning:</strong> Could not fetch users from Active Directory ({{.LDAPError}}). Showing allowed users as fallback.
+</div>
+{{end}}
+<div class="row">
+    <!-- User selector sidebar -->
+    <div class="col-md-3">
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Users</span>
+                <label class="camera-filter-label">
+                    <input type="checkbox" id="filterCameraAccess" onchange="filterCameraUsers(this.checked)">
+                    <span>Cameras only</span>
+                </label>
+            </div>
+            <div class="card-body p-2">
+                <div class="d-flex flex-column gap-1">
+                    {{range .Users}}
+                    <button class="btn btn-sm text-start user-pill {{if eq .UserID $.SelectedUser}}active{{end}}"
+                            data-has-cameras="{{if or .IsAdmin (index .Granted "cameras")}}true{{else}}false{{end}}"
+                            hx-get="/admin/permissions?user={{.UserID}}"
+                            hx-target="#admin-content"
+                            hx-swap="innerHTML"
+                            onclick="document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active')); document.querySelector('[data-tab=permissions]').classList.add('active');">
+                        <span class="d-flex align-items-center gap-2">
+                            <span class="user-dot {{if .IsAdmin}}admin{{else if index .Granted "cameras"}}cameras{{end}}"></span>
+                            <span>{{.DisplayName}}</span>
+                            {{if .IsAdmin}}<span class="badge bg-purple ms-auto">Admin</span>
+                            {{else if index .Granted "cameras"}}<span class="badge bg-blue ms-auto">Cameras</span>{{end}}
+                        </span>
+                    </button>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Permissions grid -->
+    <div class="col-md-9">
+        {{if .Users}}
+        {{$selectedUser := .SelectedUser}}
+        {{$selectedPerms := index .Users 0}}
+        {{range .Users}}
+            {{if eq .UserID $selectedUser}}
+                {{$selectedPerms = .}}
+            {{end}}
+        {{end}}
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Permissions for <strong>{{$selectedPerms.DisplayName}}</strong></span>
+                {{if not $selectedPerms.IsAdmin}}
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-grant-all"
+                            hx-post="/admin/permissions/grant-all"
+                            hx-vals='{"user_id": "{{$selectedUser}}"}'
+                            hx-target="#admin-content"
+                            hx-swap="innerHTML"
+                            hx-confirm="Grant access to ALL dashboards for {{$selectedPerms.DisplayName}}?">
+                        Grant All
+                    </button>
+                    <button class="btn btn-sm btn-revoke-all"
+                            hx-post="/admin/permissions/revoke-all"
+                            hx-vals='{"user_id": "{{$selectedUser}}"}'
+                            hx-target="#admin-content"
+                            hx-swap="innerHTML"
+                            hx-confirm="Revoke ALL dashboard access for {{$selectedPerms.DisplayName}}?">
+                        Revoke All
+                    </button>
+                </div>
+                {{end}}
+            </div>
+            <div class="card-body">
+                {{if $selectedPerms.IsAdmin}}
+                <div class="admin-notice">
+                    <span style="font-size: 1.5rem;">👑</span>
+                    <div>
+                        <strong>Admin User</strong>
+                        <div style="font-size: 0.85rem; opacity: 0.7;">Admins automatically have full access to all dashboards. No permissions needed.</div>
+                    </div>
+                </div>
+                {{end}}
+
+                {{range $.Categories}}
+                <div class="perm-grid">
+                    {{range .Dashboards}}
+                    {{$granted := index $selectedPerms.Granted .Slug}}
+                    {{$isDollarCapable := index $.DollarCapable .Slug}}
+                    {{$dollarSlug := printf "show-dollars:%s" .Slug}}
+                    {{$dollarGranted := index $selectedPerms.Granted $dollarSlug}}
+                    <div class="perm-item-row">
+                        <label class="perm-item {{if $selectedPerms.IsAdmin}}disabled{{end}} {{if or $granted $selectedPerms.IsAdmin}}granted{{end}}">
+                            <input type="checkbox"
+                                   {{if or $granted $selectedPerms.IsAdmin}}checked{{end}}
+                                   {{if $selectedPerms.IsAdmin}}disabled{{end}}
+                                   hx-post="/admin/permissions/toggle"
+                                   hx-vals='{"user_id": "{{$selectedUser}}", "slug": "{{.Slug}}", "action": "{{if $granted}}revoke{{else}}grant{{end}}"}'
+                                   hx-target="#admin-content"
+                                   hx-swap="innerHTML">
+                            <span class="perm-name">{{.Name}}</span>
+                        </label>
+                        {{if and $isDollarCapable (not $selectedPerms.IsAdmin) $granted}}
+                        <button class="dollar-toggle {{if $dollarGranted}}active{{end}}"
+                                title="{{if $dollarGranted}}Revoke{{else}}Grant{{end}} dollar visibility"
+                                hx-post="/admin/permissions/toggle"
+                                hx-vals='{"user_id": "{{$selectedUser}}", "slug": "{{$dollarSlug}}", "action": "{{if $dollarGranted}}revoke{{else}}grant{{end}}"}'
+                                hx-target="#admin-content"
+                                hx-swap="innerHTML">$</button>
+                        {{end}}
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+            </div>
+        </div>
+
+        {{if and (not $selectedPerms.IsAdmin) (index $selectedPerms.Granted $.CamerasSlug.Slug)}}
+        <div id="camera-perms-panel"
+             hx-get="/admin/camera-permissions?user={{$selectedUser}}"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <div class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-light" role="status"></div>
+                <span class="ms-2" style="color: rgba(255,255,255,0.6);">Loading camera permissions...</span>
+            </div>
+        </div>
+        {{end}}
+
+    {{end}}
+    </div>
+</div>
+
+<style>
+    .user-pill {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: rgba(255,255,255,0.8);
+        border-radius: 8px;
+        padding: 8px 12px;
+        transition: all 0.2s;
+    }
+    .user-pill:hover {
+        background: rgba(255,255,255,0.08);
+        color: #fff;
+        border-color: rgba(255,255,255,0.15);
+    }
+    .user-pill.active {
+        background: rgba(139, 92, 246, 0.15);
+        border-color: #8b5cf6;
+        color: #fff;
+    }
+    .user-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #4ade80;
+        flex-shrink: 0;
+    }
+    .user-dot.admin {
+        background: #8b5cf6;
+    }
+    .user-dot.cameras {
+        background: #3b82f6;
+    }
+    .badge.bg-blue {
+        background: rgba(59, 130, 246, 0.3);
+        color: #60a5fa;
+        font-size: 0.7rem;
+        font-weight: 500;
+    }
+    .badge.bg-purple {
+        background: rgba(139, 92, 246, 0.3);
+        color: #a78bfa;
+        font-size: 0.7rem;
+        font-weight: 500;
+    }
+    .admin-notice {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        background: rgba(139, 92, 246, 0.1);
+        border: 1px solid rgba(139, 92, 246, 0.2);
+        border-radius: 10px;
+        padding: 15px 20px;
+        margin-bottom: 20px;
+        color: #c4b5fd;
+    }
+    .perm-category {
+        margin-bottom: 20px;
+    }
+    .perm-category-header {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.5);
+        margin-bottom: 10px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .perm-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+        gap: 8px;
+    }
+    .perm-item-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .perm-item-row .perm-item {
+        flex: 1;
+        min-width: 0;
+    }
+    .dollar-toggle {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 1px solid rgba(255,255,255,0.15);
+        background: rgba(255,255,255,0.05);
+        color: rgba(255,255,255,0.3);
+        font-weight: 700;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        padding: 0;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .dollar-toggle:hover {
+        background: rgba(74, 222, 128, 0.15);
+        border-color: rgba(74, 222, 128, 0.3);
+        color: #4ade80;
+    }
+    .dollar-toggle.active {
+        background: rgba(74, 222, 128, 0.2);
+        border-color: rgba(74, 222, 128, 0.5);
+        color: #4ade80;
+    }
+    .perm-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 0.9rem;
+        color: rgba(255,255,255,0.6);
+    }
+    .perm-item:hover:not(.disabled) {
+        background: rgba(255,255,255,0.06);
+        border-color: rgba(255,255,255,0.15);
+    }
+    .perm-item.granted {
+        background: rgba(74, 222, 128, 0.08);
+        border-color: rgba(74, 222, 128, 0.3);
+        color: #4ade80;
+    }
+    .perm-item.disabled {
+        opacity: 0.6;
+        cursor: default;
+    }
+    .perm-item input[type="checkbox"] {
+        accent-color: #4ade80;
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+    }
+    .perm-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .btn-grant-all {
+        background: rgba(74, 222, 128, 0.15);
+        border: 1px solid rgba(74, 222, 128, 0.3);
+        color: #4ade80;
+        font-size: 0.8rem;
+    }
+    .btn-grant-all:hover {
+        background: rgba(74, 222, 128, 0.25);
+        color: #4ade80;
+    }
+    .btn-revoke-all {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #f87171;
+        font-size: 0.8rem;
+    }
+    .btn-revoke-all:hover {
+        background: rgba(239, 68, 68, 0.25);
+        color: #f87171;
+    }
+    .camera-filter-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8rem;
+        font-weight: 400;
+        color: rgba(255,255,255,0.5);
+        cursor: pointer;
+        margin: 0;
+    }
+    .camera-filter-label input[type="checkbox"] {
+        accent-color: #3b82f6;
+        width: 14px;
+        height: 14px;
+    }
+</style>
+<script>
+function filterCameraUsers(checked) {
+    document.querySelectorAll('.user-pill').forEach(function(pill) {
+        if (checked && pill.dataset.hasCameras !== 'true') {
+            pill.style.display = 'none';
+        } else {
+            pill.style.display = '';
+        }
+    });
+}
+</script>
+{{end}}

@@ -1,0 +1,571 @@
+<!-- Camera Content Partial -->
+
+{{if eq .View "nvrs"}}
+<!-- NVR List View -->
+{{if .DashboardPresets}}
+<h5 class="mb-3" style="color: rgba(255,255,255,0.7);">Dashboards</h5>
+<div class="row g-3 mb-4">
+    {{range .DashboardPresets}}
+    <div class="col-md-4 col-lg-3">
+        <a href="/cameras/dashboard/{{.ID}}" class="nvr-card">
+            <div class="nvr-name">{{.Name}}</div>
+            <div class="nvr-info">{{.GridSize}} Grid &middot; {{len .Cameras}} cameras</div>
+        </a>
+    </div>
+    {{end}}
+</div>
+<h5 class="mb-3" style="color: rgba(255,255,255,0.7);">NVRs</h5>
+{{end}}
+<div class="row g-4">
+    {{range .NVRs}}
+    <div class="col-md-4 col-lg-3">
+        <a href="/cameras/nvr/{{.ID}}" class="nvr-card {{if .UnderConstruction}}nvr-construction{{end}}">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <div class="nvr-name">{{.Name}}</div>
+                    {{if .UnderConstruction}}<div class="construction-label">Under Construction</div>{{end}}
+                </div>
+                <span class="nvr-status {{if .UnderConstruction}}status-construction{{else if .IsOnline}}status-online{{else}}status-offline{{end}}">
+                    {{if .UnderConstruction}}Setup{{else if .IsOnline}}Online{{else}}Offline{{end}}
+                </span>
+            </div>
+            <div class="nvr-info">
+                <div>IP: {{.IP}}</div>
+                <div>Channels: {{.Channels}}</div>
+            </div>
+        </a>
+    </div>
+    {{else}}
+    <div class="col-12">
+        <div class="text-center py-5">
+            <p class="text-muted">No NVRs configured</p>
+        </div>
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+{{if eq .View "cameras"}}
+<!-- Camera List View — Snapshot Thumbnails -->
+<div class="grid-view-wrapper">
+    <div class="breadcrumb-nav" style="margin-bottom: 10px;">
+        <a href="/cameras">NVRs</a>
+        <span class="separator">/</span>
+        <span class="current">{{.CurrentNVR.Name}}</span>
+        {{if gt .TotalPages 1}}
+        <span style="color: rgba(255,255,255,0.4); margin-left: 12px; font-size: 0.85rem;">
+            Page {{.CurrentPage}} of {{.TotalPages}}
+        </span>
+        {{end}}
+        <button class="btn btn-sm ms-3" onclick="refreshSnapshots()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); font-size: 0.8rem; padding: 2px 10px;" title="Refresh snapshots">&#x21bb; Refresh</button>
+    </div>
+
+    <div class="camera-grid grid-4x4">
+        {{range .Cameras}}
+        <a href="/cameras/view/{{.ID}}?back=/cameras/nvr/{{$.CurrentNVR.ID}}" class="camera-grid-cell">
+            <img class="cam-snapshot" loading="lazy"
+                 src="/cameras/snapshot/{{.ID}}"
+                 alt="{{.Name}}"
+                 style="width:100%; height:100%; object-fit:cover; display:block;"
+                 onerror="this.style.opacity='0.15';">
+            <div class="camera-label">
+                {{.Name}}
+                {{if $.IsAdmin}}<span class="rename-btn" onclick="return renameCamera(event, '{{.NVRID}}', '{{.Channel}}', '{{.Name}}')" title="Rename" style="margin-left: 4px;">&#9998;</span>{{end}}
+            </div>
+        </a>
+        {{else}}
+        <div style="grid-column: 1 / -1; text-align: center; padding: 40px 0;">
+            <p style="color: rgba(255,255,255,0.5);">No cameras available</p>
+        </div>
+        {{end}}
+    </div>
+
+    {{if gt .TotalPages 1}}
+    <div class="d-flex justify-content-center align-items-center mt-3 gap-2">
+        {{if gt .CurrentPage 1}}
+        <a href="/cameras/nvr/{{.CurrentNVR.ID}}?page={{sub .CurrentPage 1}}" class="btn btn-sm" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.7);">&laquo; Previous</a>
+        {{end}}
+        {{range $i := seq 1 .TotalPages}}
+        <a href="/cameras/nvr/{{$.CurrentNVR.ID}}?page={{$i}}"
+           class="btn btn-sm" style="{{if eq $i $.CurrentPage}}background: #3b82f6; color: #fff; border-color: #3b82f6;{{else}}background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.7);{{end}} min-width: 32px;">{{$i}}</a>
+        {{end}}
+        {{if lt .CurrentPage .TotalPages}}
+        <a href="/cameras/nvr/{{.CurrentNVR.ID}}?page={{add .CurrentPage 1}}" class="btn btn-sm" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.7);">Next &raquo;</a>
+        {{end}}
+    </div>
+    {{end}}
+
+    <script>
+        function refreshSnapshots() {
+            fetch('/cameras/snapshot/clear', {method: 'POST'}).then(function() {
+                document.querySelectorAll('.cam-snapshot').forEach(function(img) {
+                    var base = img.src.split('?')[0];
+                    img.src = base + '?t=' + Date.now();
+                    img.style.opacity = '';
+                });
+            });
+        }
+    </script>
+</div>
+
+<!-- Rename Modal -->
+<div class="modal fade" id="renameModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content" style="background: #1e1e2e; border: 1px solid rgba(255,255,255,0.15);">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title text-white">Rename Camera</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="renameInput" class="form-control" style="background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); color: #fff;">
+                <div id="renameError" class="text-danger mt-2" style="font-size: 0.85rem; display: none;"></div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-sm" data-bs-dismiss="modal" style="color: rgba(255,255,255,0.6);">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" id="renameSubmit">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+var _renameNvr, _renameCh, _renameModal;
+function renameCamera(e, nvrId, channel, currentName) {
+    e.preventDefault();
+    e.stopPropagation();
+    _renameNvr = nvrId;
+    _renameCh = String(channel);
+    var input = document.getElementById('renameInput');
+    var errEl = document.getElementById('renameError');
+    input.value = currentName;
+    errEl.style.display = 'none';
+    if (!_renameModal) _renameModal = new bootstrap.Modal(document.getElementById('renameModal'));
+    _renameModal.show();
+    setTimeout(function() { input.focus(); input.select(); }, 300);
+    return false;
+}
+document.getElementById('renameSubmit').addEventListener('click', function() {
+    var name = document.getElementById('renameInput').value.trim();
+    var errEl = document.getElementById('renameError');
+    if (!name) { errEl.textContent = 'Name cannot be empty'; errEl.style.display = 'block'; return; }
+    fetch('/cameras/rename', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({nvrId: _renameNvr, channel: _renameCh, name: name})
+    }).then(function(resp) {
+        if (resp.ok) { _renameModal.hide(); location.reload(); }
+        else resp.text().then(function(t) { errEl.textContent = 'Rename failed: ' + t; errEl.style.display = 'block'; });
+    }).catch(function(err) { errEl.textContent = 'Rename failed: ' + err; errEl.style.display = 'block'; });
+});
+document.getElementById('renameInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') document.getElementById('renameSubmit').click();
+});
+</script>
+{{end}}
+
+{{if eq .View "live"}}
+<!-- Live Stream View - Responsive to viewport -->
+<div class="live-view-wrapper">
+    <div class="breadcrumb-nav d-flex align-items-center">
+        {{if .BackURL}}
+        <a href="{{.BackURL}}" class="btn btn-sm me-3" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); font-size: 0.8rem; padding: 2px 10px;" title="Back to {{.BackLabel}}">
+            &larr; {{.BackLabel}}
+        </a>
+        {{end}}
+        <a href="/cameras">NVRs</a>
+        <span class="separator">/</span>
+        <a href="/cameras/nvr/{{.CurrentNVR.ID}}">{{.CurrentNVR.Name}}</a>
+        <span class="separator">/</span>
+        <span class="current">{{.CurrentCamera.Name}}</span>
+    </div>
+
+    <div class="video-wrapper">
+        <div class="video-container" style="background: #000;">
+            <video-stream id="video-stream" style="width:100%; height:100%; display:block;"></video-stream>
+            <div id="video-loading" class="video-loading">
+                <div class="spinner-border text-light" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="mt-2">Connecting to stream...</div>
+            </div>
+        </div>
+    </div>
+
+    {{if .IsAdmin}}
+    <div id="stream-debug" style="background: rgba(0,0,0,0.85); border: 1px solid #444; border-radius: 6px; padding: 10px 14px; margin: 8px 0; font-family: monospace; font-size: 11px; color: #0f0; max-height: 200px; overflow-y: auto; line-height: 1.6; display: none;"></div>
+    {{end}}
+
+    <div class="controls-bar">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <strong>{{.CurrentCamera.NVRName}}</strong>&nbsp;- {{.CurrentCamera.Name}}
+                <div class="quality-toggle ms-3">
+                    <button id="btn-sd" class="btn btn-sm quality-btn {{if eq .StreamName .SubStreamName}}active{{end}}"
+                            onclick="switchStream('{{.SubStreamName}}', this)">SD</button>
+                    <button id="btn-hd" class="btn btn-sm quality-btn {{if eq .StreamName .MainStreamName}}active{{end}}"
+                            onclick="switchStream('{{.MainStreamName}}', this)">HD</button>
+                </div>
+                <a href="/cameras/playback/{{.CurrentCamera.ID}}" class="btn btn-sm ms-3" style="background: rgba(59,130,246,0.2); border-color: #3b82f6; color: #3b82f6;">
+                    Recordings
+                </a>
+                <button onclick="var w=document.querySelector('.live-view-wrapper .video-wrapper');if(document.fullscreenElement)document.exitFullscreen();else w.requestFullscreen().catch(function(){});" class="btn btn-sm ms-2" style="background: rgba(59,130,246,0.2); border-color: #3b82f6; color: #3b82f6;" title="Fullscreen">&#x26F6;</button>
+                {{if .IsAdmin}}
+                <button onclick="var d=document.getElementById('stream-debug');if(d)d.style.display=d.style.display==='none'?'block':'none'" class="btn btn-sm ms-2" style="padding: 4px 8px; background: none; border: none; color: rgba(255,255,255,0.25); font-size: 1.1rem;" title="Stream debug log">&#9881;</button>
+                {{end}}
+            </div>
+            <div>
+                {{$prevChannel := sub .CurrentCamera.Channel 1}}
+                {{$nextChannel := add .CurrentCamera.Channel 1}}
+                {{if gt $prevChannel 0}}
+                <a href="/cameras/view/{{.CurrentNVR.ID}}_cam{{$prevChannel}}{{.BackParam}}" class="btn btn-sm">
+                    &laquo; Prev
+                </a>
+                {{end}}
+                {{if le $nextChannel .CurrentNVR.Channels}}
+                <a href="/cameras/view/{{.CurrentNVR.ID}}_cam{{$nextChannel}}{{.BackParam}}" class="btn btn-sm">
+                    Next &raquo;
+                </a>
+                {{end}}
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{if eq .View "playback"}}
+<!-- Playback View -->
+<div class="playback-wrapper" x-data="playbackApp()">
+    <div class="breadcrumb-nav">
+        <a href="/cameras">NVRs</a>
+        <span class="separator">/</span>
+        <a href="/cameras/nvr/{{.CurrentNVR.ID}}">{{.CurrentNVR.Name}}</a>
+        <span class="separator">/</span>
+        <a href="/cameras/view/{{.CurrentCamera.ID}}">{{.CurrentCamera.Name}}</a>
+        <span class="separator">/</span>
+        <span class="current">Recordings</span>
+    </div>
+
+    <!-- Controls Row -->
+    <div class="controls-bar mb-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                <strong>{{.CurrentCamera.NVRName}}</strong>&nbsp;- {{.CurrentCamera.Name}}
+                <input type="date" class="form-control form-control-sm date-picker" style="width: auto;"
+                       x-model="selectedDate" @change="searchRecordings()" value="{{.SelectedDate}}">
+                <button class="btn btn-sm ms-2" style="background: rgba(59,130,246,0.2); border-color: #3b82f6; color: #3b82f6;"
+                        @click="playPrevSegment()" :disabled="currentSegmentIndex <= 0"
+                        title="Previous clip">&laquo; Prev</button>
+                <button class="btn btn-sm" style="background: rgba(59,130,246,0.2); border-color: #3b82f6; color: #3b82f6;"
+                        @click="togglePause()" :disabled="!currentSession"
+                        title="Pause/Play" x-text="paused ? 'Play' : 'Pause'">Pause</button>
+                <button class="btn btn-sm" style="background: rgba(59,130,246,0.2); border-color: #3b82f6; color: #3b82f6;"
+                        @click="playNextSegment()" :disabled="currentSegmentIndex >= segments.length - 1"
+                        title="Next clip">Next &raquo;</button>
+                <div class="btn-group btn-group-sm ms-2">
+                    <template x-for="s in [1, 2, 4, 8]" :key="s">
+                        <button class="btn btn-sm"
+                                :style="speed === s ? 'background: #3b82f6; color: #fff; border-color: #3b82f6;' : 'background: rgba(59,130,246,0.2); border-color: #3b82f6; color: #3b82f6;'"
+                                @click="setSpeed(s)"
+                                x-text="s + 'x'"></button>
+                    </template>
+                </div>
+                <button class="btn btn-sm ms-2" style="background: rgba(59,130,246,0.2); border-color: #3b82f6; color: #3b82f6;"
+                        @click="toggleFullscreen()" title="Fullscreen">&#x26F6;</button>
+            </div>
+            <div>
+                <a href="/cameras/view/{{.CurrentCamera.ID}}" class="btn btn-sm">
+                    Back to Live
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Video Container -->
+    <div class="video-wrapper" style="flex: 1; min-height: 0;" x-show="currentSession">
+        <div class="video-container">
+            <video-stream id="playback-stream" x-ref="playbackStream" style="width:100%; height:100%; display:block;"></video-stream>
+            <div x-show="loading" class="video-loading">
+                <div class="spinner-border text-light" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="mt-2">Loading recording...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- No Recording Selected Message -->
+    <div x-show="!currentSession && !loading" class="text-center py-5" style="flex: 1;">
+        <p style="color: #fff;" x-show="segments.length > 0 && !searching">Click on the timeline to play a recording</p>
+        <p style="color: #fff;" x-show="segments.length === 0 && !searching && !searchError">No recordings found for this date</p>
+        <p style="color: #ef4444;" x-show="searchError" x-text="searchError"></p>
+        <div x-show="searching" class="d-flex justify-content-center align-items-center">
+            <div class="spinner-border spinner-border-sm text-light me-2" role="status"></div>
+            <span style="color: #fff;">Searching for recordings...</span>
+        </div>
+    </div>
+
+    <!-- 24-Hour Timeline -->
+    <div class="timeline-container mt-3">
+        <div class="timeline-bar" x-ref="timelineBar"
+             @mousedown.prevent="startDrag($event)"
+             @touchstart.prevent="startDrag($event)"
+             @mousemove="timelineHover($event)" @mouseleave="hoverTime = ''">
+            <!-- Hour markers -->
+            <template x-for="h in 24" :key="h">
+                <div class="timeline-hour" :style="'left: ' + ((h-1)/24*100) + '%'">
+                    <div class="timeline-hour-line"></div>
+                    <div class="timeline-hour-label" x-text="(h-1) === 0 ? '12a' : (h-1) < 12 ? (h-1) + 'a' : (h-1) === 12 ? '12p' : ((h-1)-12) + 'p'"></div>
+                </div>
+            </template>
+            <!-- Recording segments -->
+            <template x-for="(seg, i) in segments" :key="i">
+                <div class="timeline-segment"
+                     :style="'left: ' + segmentLeft(seg) + '%; width: ' + segmentWidth(seg) + '%'"
+                     :title="formatTime(seg.startISO) + ' - ' + formatTime(seg.endISO)">
+                </div>
+            </template>
+            <!-- Playhead -->
+            <div class="timeline-playhead" x-show="currentSession" x-ref="playhead"
+                 :style="'left: ' + playheadPosition + '%'">
+                <div class="playhead-time-tooltip" x-ref="dragTooltip"></div>
+            </div>
+            <!-- Hover time tooltip -->
+            <div class="timeline-hover-tooltip" x-show="hoverTime && !dragging"
+                 :style="'left: ' + hoverPosition + '%'"
+                 x-text="hoverTime">
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Controls -->
+    <div class="controls-bar mt-3">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+            <button class="btn btn-sm" @click="openExportModal()"
+                    style="background: rgba(34,197,94,0.2); border-color: #22c55e; color: #22c55e;">
+                Export
+            </button>
+            <a href="/cameras/exports" class="btn btn-sm"
+               style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); font-size: 0.8rem;">
+                Export Queue
+            </a>
+        </div>
+    </div>
+
+    <!-- Export Modal (Alpine-managed) -->
+    <template x-if="showExportModal">
+    <div style="position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6);"
+         @click.self="showExportModal = false" @keydown.escape.window="showExportModal = false">
+        <div style="background: #1e1e2e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; width: 320px; max-width: 90vw;">
+            <div style="padding: 16px 16px 0; display: flex; justify-content: space-between; align-items: center;">
+                <h6 style="margin: 0; color: #fff;">Export Recording</h6>
+                <button @click="showExportModal = false" style="background: none; border: none; color: rgba(255,255,255,0.5); font-size: 1.2rem; cursor: pointer;">&times;</button>
+            </div>
+            <div style="padding: 16px;">
+                <div class="mb-3">
+                    <input type="text" class="form-control form-control-sm" x-model="exportName"
+                           placeholder="Name this export (optional)"
+                           style="background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); color: #fff;">
+                </div>
+                <template x-if="currentSession">
+                <button class="btn btn-sm w-100 mb-3 py-2" @click="exportCurrentClipFromModal()"
+                        style="background: rgba(34,197,94,0.2); border-color: #22c55e; color: #22c55e;">
+                    Export Current Clip
+                    <div class="small mt-1" style="opacity: 0.7;" x-text="formatTime(playbackStart) + ' – ' + formatTime(playbackEnd)"></div>
+                </button>
+                </template>
+                <div x-show="currentSession" style="color: rgba(255,255,255,0.4); text-align: center; font-size: 0.75rem; margin-bottom: 12px;">— or choose a time range —</div>
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <input type="time" class="form-control form-control-sm" x-model="exportRangeStart"
+                           style="background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); color: #fff;">
+                    <span style="color: rgba(255,255,255,0.5);">to</span>
+                    <input type="time" class="form-control form-control-sm" x-model="exportRangeEnd"
+                           style="background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); color: #fff;">
+                </div>
+                <button class="btn btn-sm w-100 py-2" @click="exportRangeFromModal()"
+                        style="background: rgba(59,130,246,0.2); border-color: #3b82f6; color: #3b82f6;">
+                    Export Range
+                </button>
+            </div>
+        </div>
+    </div>
+    </template>
+
+    <!-- Export Toast Notification -->
+    <div x-show="exportToast" x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 transform translate-y-2"
+         x-transition:enter-end="opacity-100 transform translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         style="position: fixed; bottom: 24px; right: 24px; z-index: 10000; max-width: 420px;"
+         @click="exportToast = null">
+        <div class="d-flex align-items-start gap-2 px-3 py-3 rounded-3 shadow-lg"
+             :style="exportToast && exportToast.type === 'error'
+                 ? 'background: rgba(220,38,38,0.95); color: #fff; border: 1px solid rgba(248,113,113,0.3);'
+                 : 'background: rgba(22,101,52,0.95); color: #fff; border: 1px solid rgba(74,222,128,0.3);'">
+            <span style="font-size: 1.2em; line-height: 1;" x-text="exportToast && exportToast.type === 'error' ? '\u2716' : '\u2714'"></span>
+            <div>
+                <div style="font-weight: 600; font-size: 0.85em;" x-text="exportToast && exportToast.type === 'error' ? 'Export Failed' : 'Export Queued'"></div>
+                <div style="font-size: 0.8em; opacity: 0.9;" x-text="exportToast ? exportToast.message : ''"></div>
+                <a href="/cameras/exports" style="color: rgba(255,255,255,0.8); font-size: 0.75em; text-decoration: underline;"
+                   x-show="exportToast && exportToast.type !== 'error'">View export queue</a>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{if eq .View "grid"}}
+<!-- Grid Dashboard View -->
+<div class="grid-view-wrapper">
+    <div class="breadcrumb-nav" style="margin-bottom: 10px;">
+        <a href="/cameras">NVRs</a>
+        <span class="separator">/</span>
+        <span class="current">{{.CurrentPreset.Name}}</span>
+    </div>
+
+    <div class="camera-grid grid-{{.CurrentPreset.GridSize}}">
+        {{range .GridCameras}}
+        <a href="/cameras/view/{{.ID}}" class="camera-grid-cell">
+            <video-stream class="grid-stream" data-stream="{{.StreamURL}}" data-proxy="{{.Go2RTCProxy}}" style="width:100%; height:100%; display:block; pointer-events:none;"></video-stream>
+            <div class="camera-label">{{.Name}}</div>
+        </a>
+        {{end}}
+    </div>
+    <script type="module">
+        import '{{.Go2RTCBaseURL}}/video-rtc.js';
+        import '{{.Go2RTCBaseURL}}/video-stream.js';
+
+        const defaultGo2rtcProxy = '{{.Go2RTCBaseURL}}';
+        // WebRTC preferred, auto-falls back to MSE then HLS if unsupported
+        const mode = 'webrtc,mse,hls';
+
+        // Trim old data from SourceBuffers to prevent them filling up
+        function trimBuffer(video) {
+            try {
+                var ms = video.ms_ || video.mediaSource_ || video.webkitMediaSource;
+                if (!ms && video.srcObject && video.srcObject instanceof MediaSource) ms = video.srcObject;
+                if (!ms) {
+                    var el = video.closest('video-stream');
+                    if (el && el.pc && el.pc.ms) ms = el.pc.ms;
+                }
+                if (!ms || ms.readyState !== 'open') return;
+                var buffers = ms.sourceBuffers;
+                if (!buffers || !buffers.length) return;
+                for (var i = 0; i < buffers.length; i++) {
+                    var sb = buffers[i];
+                    if (sb.updating) continue;
+                    if (sb.buffered && sb.buffered.length > 0) {
+                        var removeEnd = video.currentTime - 2;
+                        if (removeEnd > sb.buffered.start(0)) sb.remove(sb.buffered.start(0), removeEnd);
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // Override go2rtc's aggressive playbackRate catchup on Apple devices
+        function startBufferGuard(video) {
+            if (!isAppleMobile) return;
+            setInterval(function() {
+                if (!video || !video.buffered || !video.buffered.length) return;
+                var end = video.buffered.end(video.buffered.length - 1);
+                var start = video.buffered.start(0);
+                var gap = end - video.currentTime;
+                var totalBuffered = end - start;
+
+                if (totalBuffered > 30) trimBuffer(video);
+
+                if (gap > 1.5) {
+                    video.currentTime = end - 0.3;
+                    video.playbackRate = 1.0;
+                } else if (gap > 0.5) {
+                    video.playbackRate = 1.2;
+                } else {
+                    video.playbackRate = 1.0;
+                }
+            }, 1000);
+        }
+
+        // Cleanly close a video-stream element's WebSocket and RTCPeerConnection.
+        // go2rtc's disconnectedCallback skips cleanup when background=true,
+        // so we must call ondisconnect() explicitly before removing the element.
+        function closeStream(el) {
+            if (!el) return;
+            try {
+                el.background = false;
+                if (typeof el.ondisconnect === 'function') el.ondisconnect();
+            } catch (e) {}
+        }
+
+        function reconnectGridStream(el) {
+            var streamName = el.dataset.stream;
+            var cell = el.closest('.camera-grid-cell');
+            if (el._stallInterval) { clearInterval(el._stallInterval); el._stallInterval = null; }
+            closeStream(el);
+            el.remove();
+            var fresh = document.createElement('video-stream');
+            fresh.className = 'grid-stream';
+            fresh.dataset.stream = streamName;
+            fresh.style.cssText = 'width:100%; height:100%; display:block; pointer-events:none;';
+            cell.insertBefore(fresh, cell.firstChild);
+            initGridStream(fresh);
+        }
+
+        function initGridStream(el) {
+            var proxy = el.dataset.proxy || defaultGo2rtcProxy;
+            el.mode = mode;
+            el.background = true;
+            el.src = new URL(proxy + '/api/ws?src=' + encodeURIComponent(el.dataset.stream), location.href);
+
+            setTimeout(function() {
+                var video = el.querySelector('video');
+                if (video) {
+                    video.controls = false;
+                    video.autoplay = true;
+                    video.playsInline = true;
+                    video.muted = true;
+                    video.play().catch(function() {});
+                    startBufferGuard(video);
+
+                    // Stall detection for grid cells
+                    var lastTime = -1, stalledSince = 0, retries = 0;
+                    el._stallInterval = setInterval(function() {
+                        if (!video || video.paused || video.ended) return;
+                        var now = video.currentTime;
+                        if (now === lastTime) {
+                            if (stalledSince === 0) stalledSince = Date.now();
+                            if (Date.now() - stalledSince >= 5000 && retries < 3) {
+                                retries++;
+                                stalledSince = 0;
+                                reconnectGridStream(el);
+                            }
+                        } else {
+                            stalledSince = 0;
+                            retries = 0;
+                        }
+                        lastTime = now;
+                    }, 1000);
+                }
+            }, 500);
+        }
+
+        customElements.whenDefined('video-stream').then(function() {
+            document.querySelectorAll('.grid-stream').forEach(initGridStream);
+        });
+
+        // Clean up all streams when navigating away so connections don't leak
+        window.addEventListener('pagehide', function() {
+            document.querySelectorAll('.grid-stream').forEach(function(el) {
+                if (el._stallInterval) clearInterval(el._stallInterval);
+                closeStream(el);
+            });
+        });
+    </script>
+</div>
+{{end}}
+
+{{if .Error}}
+<div class="alert alert-danger mt-4">
+    {{.Error}}
+</div>
+{{end}}

@@ -1,0 +1,49 @@
+{{/* Auto-reload script - polls /api/version and reloads on change */}}
+{{/* Also sends heartbeat for session tracking */}}
+<script>
+(function() {
+    let currentVersion = null;
+    const CHECK_INTERVAL = 60000; // 60 seconds
+
+    async function checkVersion() {
+        try {
+            const response = await fetch('/api/version');
+            if (!response.ok) return;
+
+            const data = await response.json();
+
+            if (currentVersion === null) {
+                // First check - store initial version
+                currentVersion = data.version;
+                console.log('[Auto-reload] Initial version:', currentVersion);
+            } else if (currentVersion !== data.version) {
+                // Version changed - reload page
+                console.log('[Auto-reload] Version changed:', currentVersion, '->', data.version);
+                window.location.reload();
+            }
+        } catch (error) {
+            console.warn('[Auto-reload] Version check failed:', error.message);
+        }
+    }
+
+    // Heartbeat for session tracking
+    async function sendHeartbeat() {
+        try {
+            await fetch('/api/heartbeat?page=' + encodeURIComponent(window.location.pathname), {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
+        } catch (error) {
+            // Silently ignore heartbeat failures
+        }
+    }
+
+    // Initial checks
+    checkVersion();
+    sendHeartbeat();
+
+    // Poll every 60 seconds
+    setInterval(checkVersion, CHECK_INTERVAL);
+    setInterval(sendHeartbeat, CHECK_INTERVAL);
+})();
+</script>

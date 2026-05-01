@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#1a2744"/>
+  <path d="M4 14 L10 8 L16 14 L22 8 L28 14" stroke="#2b5aad" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="16" y="26" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="11" fill="#d4a72c">CMS</text>
+</svg>

@@ -1,0 +1,180 @@
+<!-- Shared Responsive CSS for Camera Dashboard -->
+<style>
+    /* ===========================
+       Base: Push nav below fixed header elements
+       =========================== */
+    .branch-nav {
+        margin-top: 50px;
+    }
+
+    /* ===========================
+       < 1600px - Two-row header starts
+       =========================== */
+    @media (max-width: 1600px) {
+        .branch-nav {
+            padding-top: 60px !important;
+        }
+    }
+
+    /* ===========================
+       < 1400px - Start shrinking
+       =========================== */
+    @media (max-width: 1400px) {
+        .branch-nav {
+            padding-top: 60px !important;
+        }
+        .top-right-bar {
+            gap: 6px;
+        }
+        .version-badge {
+            padding: 4px 8px;
+            font-size: 0.75rem;
+        }
+        .user-info {
+            gap: 8px;
+        }
+        .btn-logout, .btn-admin {
+            padding: 4px 10px;
+            font-size: 0.8rem;
+        }
+        .user-name {
+            font-size: 0.8rem;
+        }
+    }
+
+    /* ===========================
+       < 1200px - Hide text, icons only
+       =========================== */
+    @media (max-width: 1200px) {
+        .branch-nav {
+            padding-top: 60px !important;
+        }
+        .branch-nav a {
+            padding: 5px 10px;
+            font-size: 0.85rem;
+            margin: 2px;
+        }
+        .user-name {
+            display: none;
+        }
+    }
+
+    /* ===========================
+       < 1000px - Two-row header
+       =========================== */
+    @media (max-width: 1000px) {
+        .branch-nav {
+            padding-top: 60px !important;
+        }
+        .branch-nav a {
+            padding: 4px 8px;
+            font-size: 0.8rem;
+            margin: 1px;
+        }
+        .branch-nav a[href="/"] {
+            border-right: none !important;
+            padding-right: 8px !important;
+        }
+        .user-info {
+            top: 10px;
+            left: 10px;
+            gap: 6px;
+        }
+        .top-right-bar {
+            top: 10px;
+            right: 10px;
+            gap: 4px;
+        }
+        .btn-logout, .btn-admin {
+            padding: 3px 8px;
+            font-size: 0.75rem;
+        }
+        .version-badge {
+            padding: 3px 6px;
+            font-size: 0.7rem;
+        }
+    }
+
+    /* ===========================
+       < 768px - Tablet
+       =========================== */
+    @media (max-width: 768px) {
+        .branch-nav {
+            padding-top: 60px !important;
+            padding-bottom: 6px;
+        }
+        .branch-nav .container-fluid {
+            gap: 4px;
+        }
+        .branch-nav a {
+            padding: 4px 6px;
+            font-size: 0.75rem;
+        }
+        .top-right-bar {
+            gap: 3px;
+        }
+        .version-badge {
+            padding: 2px 5px;
+            font-size: 0.65rem;
+        }
+    }
+
+    /* ===========================
+       < 576px - Mobile
+       =========================== */
+    @media (max-width: 576px) {
+        .branch-nav {
+            padding-top: 60px !important;
+        }
+        .branch-nav a {
+            padding: 3px 5px;
+            font-size: 0.7rem;
+        }
+        .dashboard-header .container-fluid {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        .dashboard-header h1 {
+            font-size: 1.1rem;
+        }
+        .dashboard-header .update-time {
+            font-size: 0.7rem;
+        }
+        .btn-admin {
+            display: none;
+        }
+        .user-info {
+            top: 6px;
+            left: 6px;
+            gap: 4px;
+        }
+        .top-right-bar {
+            top: 6px;
+            right: 6px;
+            gap: 2px;
+        }
+        .btn-logout {
+            padding: 2px 6px;
+            font-size: 0.7rem;
+        }
+    }
+
+    /* ===========================
+       < 400px - Extra small
+       =========================== */
+    @media (max-width: 400px) {
+        .branch-nav {
+            padding-top: 60px !important;
+        }
+        .branch-nav a {
+            padding: 2px 4px;
+            font-size: 0.65rem;
+        }
+        .dashboard-header h1 {
+            font-size: 1rem;
+        }
+        .version-badge {
+            display: none;
+        }
+    }
+</style>

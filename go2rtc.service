@@ -1,0 +1,19 @@
+[Unit]
+Description=go2rtc streaming service for Camera Dashboard
+After=network-online.target
+Wants=network-online.target
+
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=cms
+WorkingDirectory=/opt/cameradashboard
+ExecStart=/opt/cameradashboard/go2rtc -config /opt/cameradashboard/config/go2rtc.yaml
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

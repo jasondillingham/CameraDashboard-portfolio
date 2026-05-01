@@ -1,0 +1,180 @@
+<!-- Version Badge -->
+<style>
+    .top-right-bar {
+        position: fixed;
+        top: 15px;
+        right: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        z-index: 9999;
+    }
+    .version-badge {
+        background: rgba(0, 0, 0, 0.6);
+        color: rgba(255, 255, 255, 0.7);
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-family: monospace;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        white-space: nowrap;
+    }
+    .version-badge:hover {
+        background: rgba(0, 0, 0, 0.8);
+        color: #fff;
+    }
+    /* Exports button */
+    .exports-btn {
+        background: rgba(0, 0, 0, 0.6);
+        color: rgba(255, 255, 255, 0.7);
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        text-decoration: none;
+        white-space: nowrap;
+        transition: background 0.2s, color 0.2s;
+    }
+    .exports-btn:hover {
+        background: rgba(0, 0, 0, 0.8);
+        color: #fff;
+        text-decoration: none;
+    }
+    /* View As / Impersonation styles */
+    .view-as-wrapper {
+        position: relative;
+        display: none;
+    }
+    .view-as-wrapper.visible {
+        display: block;
+    }
+    .view-as-btn {
+        background: rgba(14, 165, 233, 0.3);
+        color: #38bdf8;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        border: 1px solid rgba(14, 165, 233, 0.5);
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    .view-as-btn:hover {
+        background: rgba(14, 165, 233, 0.5);
+        color: #fff;
+        border-color: #0ea5e9;
+    }
+    .view-as-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 6px;
+        background: #1e293b;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 10px;
+        min-width: 220px;
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 10004;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .view-as-dropdown.active {
+        display: block;
+    }
+    .view-as-search {
+        width: 100%;
+        padding: 10px 12px;
+        background: rgba(0,0,0,0.3);
+        border: none;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px 10px 0 0;
+        color: #fff;
+        font-size: 0.85rem;
+        outline: none;
+    }
+    .view-as-search::placeholder {
+        color: rgba(255,255,255,0.4);
+    }
+    .view-as-option {
+        padding: 8px 12px;
+        color: #fff;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: background 0.15s;
+    }
+    .view-as-option:hover {
+        background: rgba(14, 165, 233, 0.3);
+    }
+    .view-as-option .view-as-option-id {
+        color: rgba(255,255,255,0.4);
+        font-size: 0.75rem;
+    }
+    .impersonate-banner {
+        display: none;
+        background: rgba(234, 179, 8, 0.35);
+        color: #fbbf24;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        border: 1px solid rgba(234, 179, 8, 0.6);
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    .impersonate-banner.active {
+        display: flex;
+    }
+    .impersonate-stop {
+        background: none;
+        border: none;
+        color: #fbbf24;
+        cursor: pointer;
+        font-size: 1rem;
+        padding: 0 0 0 4px;
+        line-height: 1;
+        font-weight: bold;
+    }
+    .impersonate-stop:hover {
+        color: #fff;
+    }
+</style>
+
+<div class="top-right-bar" id="topRightBar">
+    <div class="impersonate-banner" id="impersonateBanner">
+        <span>&#128065;</span> Viewing as <strong id="impersonateName"></strong>
+        <button class="impersonate-stop" onclick="stopImpersonation()" title="Stop impersonating">&times;</button>
+    </div>
+    <a href="/cameras/exports" class="exports-btn" title="Export Queue" id="exportsBtn">
+        &#128229; Exports<span id="exportsBadge" style="display:none; background:#3b82f6; color:#fff; font-size:0.7em; padding:1px 6px; border-radius:10px; margin-left:5px; font-weight:600;"></span>
+    </a>
+    <div class="view-as-wrapper" id="viewAsWrapper">
+        <button class="view-as-btn" id="viewAsBtn" onclick="toggleViewAsDropdown()">
+            <span>&#128065;</span> View As
+        </button>
+        <div class="view-as-dropdown" id="viewAsDropdown">
+            <input type="text" class="view-as-search" id="viewAsSearch" placeholder="Search users..." oninput="filterViewAsUsers()">
+            <div id="viewAsUserList"></div>
+        </div>
+    </div>
+    <div class="version-badge">v{{version}}</div>
+</div>
+
+<script>
+(function pollExportCount() {
+    fetch('/cameras/exports?format=json').then(r => r.json()).then(jobs => {
+        var active = (jobs || []).filter(j => j.status !== 'complete' && j.status !== 'failed' && j.status !== 'cancelled').length;
+        var badge = document.getElementById('exportsBadge');
+        if (badge) {
+            if (active > 0) { badge.textContent = active; badge.style.display = 'inline'; }
+            else { badge.style.display = 'none'; }
+        }
+        setTimeout(pollExportCount, active > 0 ? 5000 : 30000);
+    }).catch(() => setTimeout(pollExportCount, 30000));
+})();
+</script>
+<script src="/static/js/impersonate.js"></script>
+

@@ -1,0 +1,40 @@
+# Build artifacts
+cameradashboard
+camera-dashboard
+cameradashboard_linux
+migrate
+bin/
+*.bin
+*.test
+
+# Runtime data
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Local configs (never commit — contain credentials)
+configs/
+config/
+mssql_config.json
+camera_config.json
+adlogin.json
+vikunja_config.json
+*.env
+*.env.local
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# AI coding assistant local state
+.claude/
+.cursor/
+.aider*
+
+# Go
+vendor/

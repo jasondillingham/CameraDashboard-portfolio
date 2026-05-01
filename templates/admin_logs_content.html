@@ -1,0 +1,146 @@
+{{/* Admin Access Logs Content - Shows page view history */}}
+<div class="filter-form">
+    <div class="d-flex gap-2 mb-3">
+        <button type="button" class="btn-quick-filter {{if eq .FilterDateFrom .Today}}active{{end}}"
+                hx-get="/admin/logs?from={{.Today}}&to={{.Today}}{{if .FilterUser}}&user={{.FilterUser}}{{end}}{{if .FilterPath}}&path={{.FilterPath}}{{end}}"
+                hx-target="#admin-content" hx-swap="innerHTML">Today</button>
+        <button type="button" class="btn-quick-filter {{if eq .FilterDateFrom .Week7Ago}}active{{end}}"
+                hx-get="/admin/logs?from={{.Week7Ago}}&to={{.Today}}{{if .FilterUser}}&user={{.FilterUser}}{{end}}{{if .FilterPath}}&path={{.FilterPath}}{{end}}"
+                hx-target="#admin-content" hx-swap="innerHTML">Last 7 Days</button>
+        <button type="button" class="btn-quick-filter {{if eq .FilterDateFrom .Days30Ago}}active{{end}}"
+                hx-get="/admin/logs?from={{.Days30Ago}}&to={{.Today}}{{if .FilterUser}}&user={{.FilterUser}}{{end}}{{if .FilterPath}}&path={{.FilterPath}}{{end}}"
+                hx-target="#admin-content" hx-swap="innerHTML">Last 30 Days</button>
+    </div>
+    <form hx-get="/admin/logs" hx-target="#admin-content" hx-swap="innerHTML" class="row g-3 align-items-end">
+        <div class="col-auto">
+            <label class="form-label">User</label>
+            <select name="user" class="form-select" style="width: 170px;">
+                <option value="">All Users</option>
+                {{range .LogUsers}}
+                <option value="{{.}}" {{if eq . $.FilterUser}}selected{{end}}>{{.}}</option>
+                {{end}}
+            </select>
+        </div>
+        <div class="col-auto">
+            <label class="form-label">Path</label>
+            <input type="text" name="path" class="form-control" placeholder="Filter by path..." value="{{.FilterPath}}" style="width: 150px;">
+        </div>
+        <div class="col-auto">
+            <label class="form-label">From</label>
+            <input type="date" name="from" class="form-control" value="{{.FilterDateFrom}}" style="width: 150px;">
+        </div>
+        <div class="col-auto">
+            <label class="form-label">To</label>
+            <input type="date" name="to" class="form-control" value="{{.FilterDateTo}}" style="width: 150px;">
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn-filter">Filter</button>
+        </div>
+        <div class="col-auto ms-auto d-flex align-items-center gap-3">
+            <span class="text-muted">{{.TotalLogs}} total entries</span>
+            <button type="button" class="btn-logout-user"
+                    hx-post="/admin/logs/clear"
+                    hx-target="#admin-content"
+                    hx-swap="innerHTML"
+                    hx-confirm="Clear ALL access logs? This cannot be undone.">Clear All Logs</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">Access Logs</div>
+    <div class="card-body p-0">
+        {{if .Logs}}
+        <table class="session-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>User</th>
+                    <th>Path</th>
+                    <th>Method</th>
+                    <th>Status</th>
+                    <th>IP</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Logs}}
+                <tr>
+                    <td>
+                        <div>{{.Timestamp.Format "3:04:05 PM"}}</div>
+                        <div class="small text-muted">{{.Timestamp.Format "Jan 2, 2006"}}</div>
+                    </td>
+                    <td>
+                        {{if .UserName}}
+                        <div class="fw-bold">{{.UserName}}</div>
+                        <div class="small text-muted">{{.UserID}}</div>
+                        {{else}}
+                        {{.UserID}}
+                        {{end}}
+                    </td>
+                    <td><a href="{{.Path}}" class="page-badge">{{.Path}}</a></td>
+                    <td>{{.Method}}</td>
+                    <td>
+                        {{if ge .StatusCode 500}}
+                        <span style="color: #f87171;">{{.StatusCode}}</span>
+                        {{else if ge .StatusCode 400}}
+                        <span style="color: #fbbf24;">{{.StatusCode}}</span>
+                        {{else}}
+                        <span style="color: #4ade80;">{{.StatusCode}}</span>
+                        {{end}}
+                    </td>
+                    <td><code style="color: #a78bfa;">{{.ClientIP}}</code></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+
+        {{if gt .TotalPages 1}}
+        <div class="d-flex justify-content-center p-3">
+            <nav>
+                <ul class="pagination mb-0">
+                    {{if gt .Page 1}}
+                    <li class="page-item">
+                        <a class="page-link" href="#"
+                           hx-get="/admin/logs?page={{sub .Page 1}}{{if .FilterUser}}&user={{.FilterUser}}{{end}}{{if .FilterPath}}&path={{.FilterPath}}{{end}}{{if .FilterDateFrom}}&from={{.FilterDateFrom}}{{end}}{{if .FilterDateTo}}&to={{.FilterDateTo}}{{end}}"
+                           hx-target="#admin-content" hx-swap="innerHTML">&laquo;</a>
+                    </li>
+                    {{else}}
+                    <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+                    {{end}}
+
+                    {{$page := .Page}}
+                    {{$totalPages := .TotalPages}}
+                    {{$filterUser := .FilterUser}}
+                    {{$filterPath := .FilterPath}}
+                    {{$filterDateFrom := .FilterDateFrom}}
+                    {{$filterDateTo := .FilterDateTo}}
+
+                    {{range $i := seq 1 (min $totalPages 10)}}
+                    <li class="page-item {{if eq $i $page}}active{{end}}">
+                        <a class="page-link" href="#"
+                           hx-get="/admin/logs?page={{$i}}{{if $filterUser}}&user={{$filterUser}}{{end}}{{if $filterPath}}&path={{$filterPath}}{{end}}{{if $filterDateFrom}}&from={{$filterDateFrom}}{{end}}{{if $filterDateTo}}&to={{$filterDateTo}}{{end}}"
+                           hx-target="#admin-content" hx-swap="innerHTML">{{$i}}</a>
+                    </li>
+                    {{end}}
+
+                    {{if lt .Page .TotalPages}}
+                    <li class="page-item">
+                        <a class="page-link" href="#"
+                           hx-get="/admin/logs?page={{add .Page 1}}{{if .FilterUser}}&user={{.FilterUser}}{{end}}{{if .FilterPath}}&path={{.FilterPath}}{{end}}{{if .FilterDateFrom}}&from={{.FilterDateFrom}}{{end}}{{if .FilterDateTo}}&to={{.FilterDateTo}}{{end}}"
+                           hx-target="#admin-content" hx-swap="innerHTML">&raquo;</a>
+                    </li>
+                    {{else}}
+                    <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+                    {{end}}
+                </ul>
+            </nav>
+        </div>
+        {{end}}
+        {{else}}
+        <div class="text-center py-5 text-muted">
+            <p class="mb-0">No access logs found</p>
+            <small>Logs will appear as users browse dashboards</small>
+        </div>
+        {{end}}
+    </div>
+</div>

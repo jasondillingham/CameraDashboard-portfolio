@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Exports</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/camera.css?v={{.Version}}">
+    <style>
+        body { background: #0f172a; }
+        .export-status { font-weight: 600; text-transform: uppercase; font-size: 0.75em; letter-spacing: 0.5px; }
+        .status-queued { color: #94a3b8; }
+        .status-downloading { color: #38bdf8; }
+        .status-encoding { color: #facc15; }
+        .status-uploading { color: #a78bfa; }
+        .status-complete { color: #4ade80; }
+        .status-failed { color: #f87171; }
+        .status-cancelled { color: #f87171; }
+        .status-processing { color: #fb923c; }
+        .export-table { border-collapse: separate; border-spacing: 0; }
+        .export-table thead th {
+            color: rgba(255,255,255,0.5);
+            font-weight: 500;
+            font-size: 0.8em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 10px 12px;
+        }
+        .export-table td {
+            vertical-align: middle;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding: 10px 12px;
+            font-size: 0.9em;
+        }
+        .export-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+        .progress { height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; }
+        .progress-bar { border-radius: 3px; transition: width 0.5s ease; }
+        .section-header {
+            color: rgba(255,255,255,0.6);
+            font-size: 0.85em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .empty-state {
+            text-align: center;
+            color: rgba(255,255,255,0.3);
+            padding: 40px 20px;
+        }
+        .back-btn {
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.7);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 6px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+        .back-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .page-title { font-size: 1.4em; font-weight: 600; }
+        .admin-badge {
+            background: rgba(251, 146, 60, 0.2);
+            color: #fb923c;
+            font-size: 0.7em;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            vertical-align: middle;
+            margin-left: 8px;
+        }
+        .auto-refresh-note {
+            color: rgba(255,255,255,0.3);
+            font-size: 0.75em;
+        }
+        .file-size { font-variant-numeric: tabular-nums; }
+    </style>
+</head>
+<body class="text-white">
+    <div class="container-fluid py-4" style="max-width: 1400px;">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <span class="page-title">Exports</span>
+                {{if .IsAdmin}}<span class="admin-badge">All Users</span>{{end}}
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span class="auto-refresh-note" id="refreshNote"></span>
+                {{if .IsAdmin}}<button class="back-btn" onclick="restartWorker()" id="restartBtn">Restart Worker</button>{{end}}
+                {{if .IsAdmin}}<button class="back-btn" onclick="toggleDebug()" id="debugToggle">Debug</button>{{end}}
+                <a href="/cameras" class="back-btn">Back to Cameras</a>
+            </div>
+        </div>
+
+        <div id="exportContent">
+            {{template "export_tables" .}}
+        </div>
+
+        {{if .IsAdmin}}
+        <div id="debugPanel" style="display:none; margin-top: 30px;">
+            <div class="section-header d-flex justify-content-between align-items-center">
+                Debug Info
+                <div class="d-flex gap-2">
+                    <select id="debugJobFilter" class="form-select form-select-sm" style="width:auto; background:#1e293b; color:#fff; border-color:rgba(255,255,255,0.2); font-size:0.8em;">
+                        <option value="">All logs</option>
+                    </select>
+                    <button onclick="refreshDebug()" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:0.8em">Refresh</button>
+                    <button onclick="copyDebug()" class="btn btn-sm btn-outline-warning py-0 px-2" style="font-size:0.8em">Copy All</button>
+                </div>
+            </div>
+            <div id="debugConfig" style="margin-bottom:12px;"></div>
+            <div style="max-height:500px; overflow-y:auto; background:rgba(0,0,0,0.4); border-radius:8px; padding:12px; font-family:monospace; font-size:0.78em; line-height:1.6;">
+                <pre id="debugLogs" style="margin:0; white-space:pre-wrap; color:rgba(255,255,255,0.8);"></pre>
+            </div>
+        </div>
+        {{end}}
+    </div>
+
+    <script>
+        var lastKnownSize = {};
+
+        function formatFileSize(bytes) {
+            if (!bytes || bytes <= 0) return '';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+            return (bytes / 1073741824).toFixed(2) + ' GB';
+        }
+
+        function getFileSize(job) {
+            var uid = job.jobUid;
+            if (job.fileSize > 0) {
+                lastKnownSize[uid] = job.fileSize;
+            }
+            return lastKnownSize[uid] || 0;
+        }
+
+        function cancelExport(jobUID) {
+            if (!confirm('Cancel this export?')) return;
+            fetch('/cameras/export/cancel/' + jobUID, { method: 'POST' })
+                .then(() => refreshExports());
+        }
+
+        function retryExport(jobUID) {
+            fetch('/admin/exports/retry/' + jobUID, { method: 'POST' })
+                .then(() => refreshExports());
+        }
+
+        function deleteExport(jobUID) {
+            if (!confirm('Delete this export and its file?')) return;
+            fetch('/admin/exports/delete/' + jobUID, { method: 'POST' })
+                .then(() => refreshExports());
+        }
+
+        function restartWorker() {
+            var btn = document.getElementById('restartBtn');
+            btn.textContent = 'Restarting...';
+            btn.disabled = true;
+            fetch('/admin/exports/restart-worker', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    btn.textContent = 'Restarted';
+                    btn.style.borderColor = '#4ade80';
+                    btn.style.color = '#4ade80';
+                    setTimeout(function() {
+                        btn.textContent = 'Restart Worker';
+                        btn.style.borderColor = '';
+                        btn.style.color = '';
+                        btn.disabled = false;
+                    }, 3000);
+                    refreshExports();
+                })
+                .catch(() => {
+                    btn.textContent = 'Failed';
+                    btn.style.color = '#f87171';
+                    setTimeout(function() {
+                        btn.textContent = 'Restart Worker';
+                        btn.style.color = '';
+                        btn.disabled = false;
+                    }, 3000);
+                });
+        }
+
+        function purgeAllHistory() {
+            if (!confirm('Delete ALL completed and failed exports? This cannot be undone.')) return;
+            fetch('/admin/exports/purge', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    refreshExports();
+                });
+        }
+
+        let refreshTimer;
+        function refreshExports() {
+            fetch('/cameras/exports?format=json')
+                .then(r => r.json())
+                .then(jobs => {
+                    const active = (jobs || []).filter(j =>
+                        j.status !== 'complete' && j.status !== 'failed' && j.status !== 'cancelled'
+                    );
+                    const history = (jobs || []).filter(j =>
+                        j.status === 'complete' || j.status === 'failed' || j.status === 'cancelled'
+                    );
+
+                    renderTables(active, history);
+
+                    // Auto-refresh faster if there are active jobs
+                    clearTimeout(refreshTimer);
+                    const interval = active.length > 0 ? 3000 : 15000;
+                    refreshTimer = setTimeout(refreshExports, interval);
+
+                    const note = document.getElementById('refreshNote');
+                    if (active.length > 0) {
+                        note.textContent = 'Auto-refreshing...';
+                    } else {
+                        note.textContent = '';
+                    }
+                })
+                .catch(() => {
+                    clearTimeout(refreshTimer);
+                    refreshTimer = setTimeout(refreshExports, 10000);
+                });
+        }
+
+        function statusBadge(status) {
+            return '<span class="export-status status-' + status + '">' + status + '</span>';
+        }
+
+        function formatETA(secs) {
+            if (secs < 5) return 'Almost done';
+            if (secs < 60) return '~' + secs + 's remaining';
+            if (secs < 3600) return '~' + Math.ceil(secs / 60) + 'min remaining';
+            return '~' + Math.floor(secs / 3600) + 'h ' + Math.ceil((secs % 3600) / 60) + 'min remaining';
+        }
+
+        function estimateETA(job) {
+            if (job.progress <= 0) return '';
+            // Use createdAt as start time and current progress to estimate
+            var created = new Date(job.createdAt).getTime();
+            if (!created || isNaN(created)) return '';
+            var elapsed = (Date.now() - created) / 1000;
+            if (elapsed < 3) return '';
+            var secsPerPct = elapsed / job.progress;
+            var remaining = Math.round(secsPerPct * (100 - job.progress));
+            return formatETA(remaining);
+        }
+
+        function progressCell(job) {
+            if (job.status === 'complete') return '<small class="text-success">Done</small>';
+            if (job.status === 'failed') return '<small class="text-danger" title="' + (job.error || '') + '">Failed</small>';
+            if (job.status === 'cancelled') return '<small class="text-danger">Cancelled</small>';
+            if (job.status === 'queued') return '<small class="text-muted">Waiting...</small>';
+            if (job.status === 'processing') return '<small style="color:#fb923c">Checking codec...</small>';
+            var barColor = job.status === 'encoding' ? 'bg-warning' : (job.status === 'uploading' ? 'bg-success' : 'bg-info');
+            var eta = estimateETA(job);
+            var etaHtml = eta ? ' <small style="color:rgba(255,255,255,0.4);">' + eta + '</small>' : '';
+            return '<div class="d-flex align-items-center gap-2"><div class="progress flex-grow-1"><div class="progress-bar ' + barColor + '" style="width:' + job.progress + '%"></div></div>' +
+                   '<small class="text-muted text-nowrap">' + job.progress + '%</small></div>' +
+                   '<div style="margin-top:2px;">' + etaHtml + '</div>';
+        }
+
+        function timeRange(job) {
+            // Parse and format nicely
+            try {
+                const s = new Date(job.startTime);
+                const e = new Date(job.endTime);
+                const fmt = (d) => d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                return '<small>' + fmt(s) + '<br>to ' + fmt(e) + '</small>';
+            } catch(_) {
+                return '<small>' + job.startTime + '<br>to ' + job.endTime + '</small>';
+            }
+        }
+
+        function createdAt(job) {
+            var raw = job.createdAt;
+            if (!raw || raw === '0001-01-01T00:00:00Z') return '';
+            var d = new Date(raw);
+            if (isNaN(d.getTime())) return String(raw);
+            var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            var h = d.getHours(), m = d.getMinutes();
+            var ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            return months[d.getMonth()] + ' ' + d.getDate() + ', ' + h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
+        }
+
+        function actionsCell(job) {
+            var btns = '';
+            if (job.status === 'complete') {
+                if (job.shareLink) {
+                    var links = job.shareLink.split('\n');
+                    if (links.length === 1) {
+                        btns += '<a href="' + links[0] + '" target="_blank" class="btn btn-sm btn-success py-0 px-2" style="font-size:0.8em">OneDrive</a> ';
+                    } else {
+                        links.forEach(function(link, i) {
+                            if (link.trim()) btns += '<a href="' + link.trim() + '" target="_blank" class="btn btn-sm btn-success py-0 px-2 me-1 mb-1" style="font-size:0.8em">Clip ' + (i+1) + '</a> ';
+                        });
+                    }
+                } else {
+                    btns += '<a href="/cameras/export/download/' + job.jobUid + '" class="btn btn-sm btn-success py-0 px-2" style="font-size:0.8em">Download</a> ';
+                }
+            }
+            if (job.status !== 'failed' && job.status !== 'complete' && job.status !== 'cancelled') {
+                btns += '<button onclick="cancelExport(\'' + job.jobUid + '\')" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.8em">Cancel</button> ';
+            }
+            if (isAdmin && (job.status === 'complete' || job.status === 'failed' || job.status === 'cancelled')) {
+                btns += '<button onclick="retryExport(\'' + job.jobUid + '\')" class="btn btn-sm btn-outline-info py-0 px-2 me-1" style="font-size:0.8em" title="Re-queue this export">Retry</button>';
+                btns += '<button onclick="deleteExport(\'' + job.jobUid + '\')" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.8em" title="Delete export and file">Delete</button>';
+            }
+            return btns;
+        }
+
+        function renderRow(job, showUser) {
+            let row = '<tr>';
+            var camLabel = job.cameraName || '';
+            if (job.exportName) camLabel = '<strong>' + job.exportName + '</strong><br><small class="text-muted">' + camLabel + '</small>';
+            row += '<td>' + camLabel + '</td>';
+            row += '<td>' + (job.nvrName || '') + '</td>';
+            if (showUser) row += '<td>' + (job.requestedBy || '') + '</td>';
+            row += '<td class="text-nowrap">' + timeRange(job) + '</td>';
+            row += '<td>' + statusBadge(job.status) + '</td>';
+            row += '<td style="min-width:90px">' + progressCell(job) + '</td>';
+            row += '<td class="file-size"><small>' + formatFileSize(getFileSize(job)) + '</small></td>';
+            row += '<td><small class="text-muted">' + createdAt(job) + '</small></td>';
+            row += '<td>' + actionsCell(job) + '</td>';
+            row += '</tr>';
+            return row;
+        }
+
+        const isAdmin = {{if .IsAdmin}}true{{else}}false{{end}};
+
+        function tableHeader() {
+            let h = '<tr><th>Camera</th><th>NVR</th>';
+            if (isAdmin) h += '<th>User</th>';
+            h += '<th>Time Range</th><th>Status</th><th>Progress</th><th>Size</th><th>Requested</th><th>Actions</th></tr>';
+            return h;
+        }
+
+        function renderTables(active, history) {
+            let html = '';
+
+            // Active queue
+            html += '<div class="section-header">Active Queue (' + active.length + ')</div>';
+            if (active.length === 0) {
+                html += '<div class="empty-state">No active exports</div>';
+            } else {
+                html += '<div class="table-responsive mb-4"><table class="table table-dark export-table"><thead>' + tableHeader() + '</thead><tbody>';
+                active.forEach(j => html += renderRow(j, isAdmin));
+                html += '</tbody></table></div>';
+            }
+
+            // History
+            html += '<div class="section-header mt-4 d-flex justify-content-between align-items-center">Export History (' + history.length + ')';
+            if (isAdmin && history.length > 0) {
+                html += '<button onclick="purgeAllHistory()" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.8em; text-transform:none; letter-spacing:0; font-weight:400;">Purge All</button>';
+            }
+            html += '</div>';
+            if (history.length === 0) {
+                html += '<div class="empty-state">No export history</div>';
+            } else {
+                html += '<div class="table-responsive"><table class="table table-dark export-table"><thead>' + tableHeader() + '</thead><tbody>';
+                history.forEach(j => html += renderRow(j, isAdmin));
+                html += '</tbody></table></div>';
+            }
+
+            document.getElementById('exportContent').innerHTML = html;
+        }
+
+        // Initial load via JSON for consistent rendering, then auto-refresh
+        refreshExports();
+
+        // --- Debug panel (admin only) ---
+        let debugVisible = false;
+        let debugData = null;
+        let debugTimer = null;
+
+        function toggleDebug() {
+            debugVisible = !debugVisible;
+            var panel = document.getElementById('debugPanel');
+            var btn = document.getElementById('debugToggle');
+            if (panel) {
+                panel.style.display = debugVisible ? 'block' : 'none';
+                btn.style.borderColor = debugVisible ? '#38bdf8' : '';
+                btn.style.color = debugVisible ? '#38bdf8' : '';
+                if (debugVisible) {
+                    refreshDebug();
+                } else {
+                    clearTimeout(debugTimer);
+                }
+            }
+        }
+
+        function refreshDebug() {
+            var jobFilter = document.getElementById('debugJobFilter');
+            var filterVal = jobFilter ? jobFilter.value : '';
+            var url = '/admin/exports/debug';
+            if (filterVal) url += '?job=' + encodeURIComponent(filterVal);
+
+            fetch(url).then(r => r.json()).then(data => {
+                debugData = data;
+
+                // Render config
+                var cfgHtml = '<div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:8px;">';
+                if (data.config) {
+                    cfgHtml += '<span style="color:rgba(255,255,255,0.5)">Dir: <span style="color:#fff">' + (data.config.exportDir || 'N/A') + '</span></span>';
+                    cfgHtml += '<span style="color:rgba(255,255,255,0.5)">Max Concurrent: <span style="color:#fff">' + data.config.maxConcurrent + '</span></span>';
+                    cfgHtml += '<span style="color:rgba(255,255,255,0.5)">H264 Encode: <span style="color:#fff">' + data.config.encodeH264 + '</span></span>';
+                    cfgHtml += '<span style="color:rgba(255,255,255,0.5)">Retention: <span style="color:#fff">' + data.config.retentionHours + 'h</span></span>';
+                }
+                if (data.tools) {
+                    var ffm = data.tools.ffmpegAvailable ? '<span style="color:#4ade80">yes</span>' : '<span style="color:#f87171">NO</span>';
+                    var ffp = data.tools.ffprobeAvailable ? '<span style="color:#4ade80">yes</span>' : '<span style="color:#f87171">NO</span>';
+                    cfgHtml += '<span style="color:rgba(255,255,255,0.5)">ffmpeg: ' + ffm + '</span>';
+                    cfgHtml += '<span style="color:rgba(255,255,255,0.5)">ffprobe: ' + ffp + '</span>';
+                }
+                if (data.exportDir) {
+                    var dirOk = data.exportDir.exists ? '<span style="color:#4ade80">exists</span>' : '<span style="color:#f87171">MISSING</span>';
+                    cfgHtml += '<span style="color:rgba(255,255,255,0.5)">Export Dir: ' + dirOk + '</span>';
+                }
+                if (data.activeWorkerChans && data.activeWorkerChans.length > 0) {
+                    cfgHtml += '<span style="color:rgba(255,255,255,0.5)">Active Workers: <span style="color:#38bdf8">' + data.activeWorkerChans.length + '</span></span>';
+                }
+                cfgHtml += '</div>';
+                document.getElementById('debugConfig').innerHTML = cfgHtml;
+
+                // Populate job filter dropdown from current exports
+                if (!filterVal) {
+                    fetch('/cameras/exports?format=json').then(r => r.json()).then(jobs => {
+                        var sel = document.getElementById('debugJobFilter');
+                        var current = sel.value;
+                        sel.innerHTML = '<option value="">All logs</option>';
+                        (jobs || []).forEach(j => {
+                            var label = j.cameraName + ' (' + j.status + ')';
+                            sel.innerHTML += '<option value="' + j.jobUid + '"' + (j.jobUid === current ? ' selected' : '') + '>' + label + '</option>';
+                        });
+                    });
+                }
+
+                // Render logs
+                var logs = data.logs || [];
+                var logText = '';
+                logs.forEach(entry => {
+                    var t = new Date(entry.time);
+                    var ts = t.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    logText += '[' + ts + '] ' + entry.message + '\n';
+                });
+                document.getElementById('debugLogs').textContent = logText || '(no log entries)';
+
+                // Auto-scroll to bottom
+                var logPre = document.getElementById('debugLogs');
+                if (logPre && logPre.parentElement) {
+                    logPre.parentElement.scrollTop = logPre.parentElement.scrollHeight;
+                }
+
+                // Schedule next refresh if panel is open
+                clearTimeout(debugTimer);
+                if (debugVisible) {
+                    var hasActive = (data.activeWorkerChans && data.activeWorkerChans.length > 0);
+                    debugTimer = setTimeout(refreshDebug, hasActive ? 3000 : 10000);
+                }
+            }).catch(err => {
+                document.getElementById('debugLogs').textContent = 'Error loading debug: ' + err;
+                clearTimeout(debugTimer);
+                if (debugVisible) debugTimer = setTimeout(refreshDebug, 10000);
+            });
+        }
+
+        function clipCopy(text) {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            var btn = document.querySelector('[onclick="copyDebug()"]');
+            if (btn) { btn.textContent = 'Copied!'; setTimeout(function(){ btn.textContent = 'Copy All'; }, 2000); }
+        }
+
+        function copyDebug() {
+            if (!debugData) { refreshDebug(); return; }
+            var text = '=== Export Debug Info ===\n';
+            text += 'Timestamp: ' + new Date().toISOString() + '\n\n';
+            text += '--- Config ---\n';
+            text += JSON.stringify(debugData.config, null, 2) + '\n\n';
+            text += '--- Tools ---\n';
+            text += JSON.stringify(debugData.tools, null, 2) + '\n\n';
+            text += '--- Export Dir ---\n';
+            text += JSON.stringify(debugData.exportDir, null, 2) + '\n\n';
+            text += '--- Active Workers ---\n';
+            text += JSON.stringify(debugData.activeWorkerChans, null, 2) + '\n\n';
+            text += '--- Logs (' + (debugData.logs || []).length + ' entries) ---\n';
+            (debugData.logs || []).forEach(entry => {
+                text += '[' + entry.time + '] ' + entry.message + '\n';
+            });
+
+            // Also include current jobs
+            fetch('/cameras/exports?format=json').then(r => r.json()).then(jobs => {
+                text += '\n--- Current Jobs ---\n';
+                text += JSON.stringify(jobs, null, 2) + '\n';
+                clipCopy(text);
+            }).catch(() => {
+                clipCopy(text);
+            });
+        }
+    </script>
+</body>
+</html>
+
+{{define "export_tables"}}
+<!-- Server-rendered fallback, replaced by JS on load -->
+<div class="empty-state">Loading exports...</div>
+{{end}}

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/theme.css" rel="stylesheet">
+    <link href="/static/css/camera.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+    <script>
+        // Detect iOS/iPad Safari — used for buffer guard (MSE catchup fix)
+        var isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    </script>
+    {{template "responsive.html"}}
+</head>
+<body>
+    {{template "version_badge.html"}}
+    {{template "user_info.html" .}}
+
+    <div class="update-time" style="position:fixed;bottom:8px;right:12px;z-index:1000;opacity:0.6;font-size:0.75rem;">
+        Last updated: {{.UpdatedAt.Format "3:04:05 PM"}}
+    </div>
+
+    <div class="container-fluid px-4" style="margin-top:50px;">
+        <div id="camera-content">
+            {{template "camera_content.html" .}}
+        </div>
+    </div>
+
+    {{if eq .View "live"}}
+    <script>
+        window.STREAM_CONFIG = {
+            go2rtcProxy: '{{.Go2RTCBaseURL}}',
+            streamName: '{{.StreamName}}'
+        };
+    </script>
+    <script type="module">
+        import '{{.Go2RTCBaseURL}}/video-rtc.js';
+        import '{{.Go2RTCBaseURL}}/video-stream.js';
+        import '/static/js/live-stream.js';
+    </script>
+    {{end}}
+
+    {{if eq .View "playback"}}
+    <script>
+        window.PLAYBACK_CONFIG = {
+            go2rtcProxy: '{{.Go2RTCBaseURL}}',
+            nvrID: '{{.CurrentNVR.ID}}',
+            cameraChannel: {{.CurrentCamera.Channel}},
+            cameraName: '{{.CurrentCamera.Name}}',
+            nvrName: '{{.CurrentNVR.Name}}',
+            cameraID: '{{.CurrentCamera.ID}}',
+            selectedDate: '{{.SelectedDate}}'
+        };
+    </script>
+    <script type="module">
+        const p = window.PLAYBACK_CONFIG.go2rtcProxy;
+        await import(p + '/video-rtc.js');
+        await import(p + '/video-stream.js');
+    </script>
+    <script src="/static/js/playback.js?v={{version}}"></script>
+    {{end}}
+</body>
+</html>

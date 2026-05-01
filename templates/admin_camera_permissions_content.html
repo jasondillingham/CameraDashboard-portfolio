@@ -1,0 +1,284 @@
+{{define "admin_camera_permissions_content.html"}}
+<div class="cam-perm-panel">
+    <div class="cam-perm-header">
+        <h5>Camera Permissions for <strong>{{.DisplayName}}</strong></h5>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-cam-grant-all"
+                    hx-post="/admin/camera-permissions/toggle"
+                    hx-vals='{"user_id": "{{.UserID}}", "type": "grant-all-nvrs", "action": "grant"}'
+                    hx-target="#camera-perms-panel"
+                    hx-swap="innerHTML"
+                    hx-confirm="Grant access to ALL NVRs (all cameras) for {{.DisplayName}}?">
+                Grant All NVRs
+            </button>
+            <button class="btn btn-sm btn-cam-revoke-all"
+                    hx-post="/admin/camera-permissions/toggle"
+                    hx-vals='{"user_id": "{{.UserID}}", "type": "revoke-all-cameras", "action": "revoke"}'
+                    hx-target="#camera-perms-panel"
+                    hx-swap="innerHTML"
+                    hx-confirm="Revoke ALL camera access for {{.DisplayName}}?">
+                Revoke All
+            </button>
+            <button class="btn btn-sm btn-cam-refresh"
+                    onclick="fetch('/cameras/snapshot/clear', {method:'POST'}).then(() => { document.querySelectorAll('.cam-thumb').forEach(img => { img.src = img.dataset.src + '&t=' + Date.now(); }); })">
+                Refresh Screenshots
+            </button>
+        </div>
+    </div>
+
+    {{if .Presets}}
+    <div class="cam-section">
+        <div class="cam-section-header">Presets</div>
+        <div class="perm-grid">
+            {{range .Presets}}
+            <label class="perm-item {{if .Granted}}granted{{end}}">
+                <input type="checkbox"
+                       {{if .Granted}}checked{{end}}
+                       hx-post="/admin/camera-permissions/toggle"
+                       hx-vals='{"user_id": "{{$.UserID}}", "type": "preset", "preset_id": "{{.ID}}", "action": "{{if .Granted}}revoke{{else}}grant{{end}}"}'
+                       hx-target="#camera-perms-panel"
+                       hx-swap="innerHTML">
+                <span class="perm-name">{{.Name}}</span>
+            </label>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+
+    <div class="cam-section">
+        <div class="cam-section-header">NVRs</div>
+        {{range .NVRs}}
+        <div class="cam-nvr-card" x-data="{ open: false }">
+            <div class="cam-nvr-header" @click="open = !open">
+                <span class="cam-nvr-toggle" :class="{ 'open': open }">&#9654;</span>
+                <span class="cam-nvr-name">{{.Name}}</span>
+                <span class="cam-nvr-info">{{.Channels}} ch</span>
+                <div class="cam-nvr-actions" @click.stop>
+                    <button class="btn btn-xs btn-cam-nvr-grant"
+                            hx-post="/admin/camera-permissions/toggle"
+                            hx-vals='{"user_id": "{{$.UserID}}", "type": "camera", "nvr_id": "{{.ID}}", "channel": "0", "action": "grant"}'
+                            hx-target="#camera-perms-panel"
+                            hx-swap="innerHTML">
+                        Grant All
+                    </button>
+                    <button class="btn btn-xs btn-cam-nvr-revoke"
+                            hx-post="/admin/camera-permissions/toggle"
+                            hx-vals='{"user_id": "{{$.UserID}}", "type": "camera", "nvr_id": "{{.ID}}", "channel": "0", "action": "revoke"}'
+                            hx-target="#camera-perms-panel"
+                            hx-swap="innerHTML">
+                        Revoke All
+                    </button>
+                </div>
+            </div>
+            <div class="cam-nvr-body" x-show="open" x-transition>
+                <!-- All Cameras toggle (channel=0) -->
+                <label class="perm-item cam-all-toggle {{if .AllGrant}}granted{{end}}">
+                    <input type="checkbox"
+                           {{if .AllGrant}}checked{{end}}
+                           hx-post="/admin/camera-permissions/toggle"
+                           hx-vals='{"user_id": "{{$.UserID}}", "type": "camera", "nvr_id": "{{.ID}}", "channel": "0", "action": "{{if .AllGrant}}revoke{{else}}grant{{end}}"}'
+                           hx-target="#camera-perms-panel"
+                           hx-swap="innerHTML">
+                    <span class="perm-name">All Cameras</span>
+                    {{if .AllGrant}}<span class="cam-override-badge">overrides individual</span>{{end}}
+                </label>
+
+                <!-- Individual channels -->
+                <div class="cam-channel-grid">
+                    {{$nvr := .}}
+                    {{range channels .Channels}}
+                    {{$granted := or $nvr.AllGrant (index $nvr.Grants .)}}
+                    <label class="perm-item cam-perm-with-thumb {{if $granted}}granted{{end}} {{if $nvr.AllGrant}}disabled{{end}}">
+                        <input type="checkbox"
+                               {{if $granted}}checked{{end}}
+                               {{if $nvr.AllGrant}}disabled{{end}}
+                               hx-post="/admin/camera-permissions/toggle"
+                               hx-vals='{"user_id": "{{$.UserID}}", "type": "camera", "nvr_id": "{{$nvr.ID}}", "channel": "{{.}}", "action": "{{if index $nvr.Grants .}}revoke{{else}}grant{{end}}"}'
+                               hx-target="#camera-perms-panel"
+                               hx-swap="innerHTML">
+                        <img class="cam-thumb" loading="lazy"
+                             src="/cameras/snapshot/{{$nvr.ID}}_cam{{.}}?w=120"
+                             data-src="/cameras/snapshot/{{$nvr.ID}}_cam{{.}}?w=120"
+                             alt="Cam {{.}}"
+                             onerror="this.style.display='none'">
+                        <div class="cam-label">
+                            <span class="cam-channel-num">{{.}}</span>
+                            <span class="perm-name">{{index $nvr.CameraNames .}}</span>
+                        </div>
+                    </label>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+<style>
+    .cam-perm-panel {
+        margin-top: 20px;
+    }
+    .cam-perm-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .cam-perm-header h5 {
+        margin: 0;
+        color: #06b6d4;
+    }
+    .cam-section {
+        margin-bottom: 20px;
+    }
+    .cam-section-header {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.5);
+        margin-bottom: 10px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .cam-nvr-card {
+        background: rgba(255,255,255,0.02);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        margin-bottom: 8px;
+        overflow: hidden;
+    }
+    .cam-nvr-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .cam-nvr-header:hover {
+        background: rgba(255,255,255,0.04);
+    }
+    .cam-nvr-toggle {
+        color: rgba(255,255,255,0.5);
+        font-size: 0.75rem;
+        transition: transform 0.2s;
+    }
+    .cam-nvr-toggle.open {
+        transform: rotate(90deg);
+    }
+    .cam-nvr-name {
+        font-weight: 600;
+        color: #fff;
+    }
+    .cam-nvr-info {
+        font-size: 0.8rem;
+        color: rgba(255,255,255,0.4);
+    }
+    .cam-nvr-actions {
+        margin-left: auto;
+        display: flex;
+        gap: 6px;
+    }
+    .btn-xs {
+        padding: 2px 8px;
+        font-size: 0.7rem;
+        border-radius: 4px;
+    }
+    .btn-cam-nvr-grant {
+        background: rgba(74, 222, 128, 0.1);
+        border: 1px solid rgba(74, 222, 128, 0.3);
+        color: #4ade80;
+    }
+    .btn-cam-nvr-grant:hover {
+        background: rgba(74, 222, 128, 0.2);
+        color: #4ade80;
+    }
+    .btn-cam-nvr-revoke {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #f87171;
+    }
+    .btn-cam-nvr-revoke:hover {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+    }
+    .cam-nvr-body {
+        padding: 12px 16px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .cam-all-toggle {
+        margin-bottom: 10px;
+        font-weight: 600;
+    }
+    .cam-override-badge {
+        font-size: 0.7rem;
+        color: rgba(255,255,255,0.4);
+        font-style: italic;
+        font-weight: 400;
+    }
+    .cam-channel-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 6px;
+    }
+    .cam-perm-with-thumb {
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+    }
+    .cam-thumb {
+        width: 64px;
+        height: 36px;
+        object-fit: cover;
+        border-radius: 4px;
+        background: rgba(0,0,0,0.3);
+        flex-shrink: 0;
+    }
+    .cam-label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+    }
+    .cam-channel-num {
+        font-size: 0.75rem;
+        color: rgba(255,255,255,0.4);
+        min-width: 18px;
+        text-align: right;
+        flex-shrink: 0;
+    }
+    .btn-cam-grant-all {
+        background: rgba(74, 222, 128, 0.15);
+        border: 1px solid rgba(74, 222, 128, 0.3);
+        color: #4ade80;
+        font-size: 0.8rem;
+    }
+    .btn-cam-grant-all:hover {
+        background: rgba(74, 222, 128, 0.25);
+        color: #4ade80;
+    }
+    .btn-cam-revoke-all {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #f87171;
+        font-size: 0.8rem;
+    }
+    .btn-cam-revoke-all:hover {
+        background: rgba(239, 68, 68, 0.25);
+        color: #f87171;
+    }
+    .btn-cam-refresh {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.8rem;
+    }
+    .btn-cam-refresh:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: #fff;
+    }
+</style>
+{{end}}

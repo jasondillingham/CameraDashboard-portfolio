@@ -1,0 +1,296 @@
+{{define "admin_docs_content.html"}}
+<div class="card">
+    <div class="card-header">RTSP Streaming Architecture</div>
+    <div class="card-body docs-content">
+        <div class="docs-diagram">
+            <div class="docs-node">
+                <div class="docs-node-title">Hikvision NVR</div>
+                <div class="docs-node-detail">RTSP :554</div>
+                <div class="docs-node-detail">ISAPI HTTP API</div>
+            </div>
+            <div class="docs-arrow">RTSP<br>H.264 / H.265</div>
+            <div class="docs-node">
+                <div class="docs-node-title">go2rtc Server</div>
+                <div class="docs-node-detail">{{.Go2RTCURL}}</div>
+                <div class="docs-node-detail">Transcode + Relay</div>
+            </div>
+            <div class="docs-arrow">WebRTC<br>Low Latency</div>
+            <div class="docs-node">
+                <div class="docs-node-title">Browser</div>
+                <div class="docs-node-detail">&lt;video-stream&gt; element</div>
+                <div class="docs-node-detail">No plugins needed</div>
+            </div>
+        </div>
+
+        <h5 class="docs-section-title">How Streams Work</h5>
+        <div class="docs-section">
+            <div class="docs-step">
+                <span class="docs-step-num">1</span>
+                <div>
+                    <strong>Stream Registration (Startup)</strong>
+                    <p>When the app starts, it registers RTSP streams with go2rtc for every NVR channel. Each channel gets two streams:</p>
+                    <ul>
+                        <li><strong>Main (HD)</strong>: <code>rtsp://user:pass@IP:554/Streaming/Channels/{ch}01</code></li>
+                        <li><strong>Sub (SD)</strong>: <code>rtsp://user:pass@IP:554/Streaming/Channels/{ch}02</code></li>
+                    </ul>
+                    <p>H.265 streams get an automatic FFmpeg transcoding fallback to H.264 for browser compatibility.</p>
+                </div>
+            </div>
+            <div class="docs-step">
+                <span class="docs-step-num">2</span>
+                <div>
+                    <strong>Live Viewing (WebRTC)</strong>
+                    <p>The browser uses go2rtc's <code>&lt;video-stream&gt;</code> custom element with a WebSocket connection:</p>
+                    <code class="docs-code-block">&lt;video-stream src="go2rtc/api/ws?src={streamName}" mode="webrtc,mse,hls"&gt;</code>
+                    <p>go2rtc handles the RTSP &rarr; WebRTC/MSE protocol conversion. All video processing happens on the go2rtc server &mdash; the user's browser just receives the decoded stream.</p>
+                </div>
+            </div>
+            <div class="docs-step">
+                <span class="docs-step-num">3</span>
+                <div>
+                    <strong>Recording Playback</strong>
+                    <p>Playback uses Hikvision's RTSP playback URLs with time range parameters:</p>
+                    <code class="docs-code-block">rtsp://user:pass@IP:554/Streaming/tracks/{ch}01?starttime=...&endtime=...</code>
+                    <p>A temporary stream is registered with go2rtc (named <code>playback_{sessionID}</code>) and delivered to the browser via WebRTC, same as live.</p>
+                    <p>Sessions auto-cleanup after 5 minutes of inactivity. Max 4 playback sessions per NVR (LRU eviction).</p>
+                </div>
+            </div>
+            <div class="docs-step">
+                <span class="docs-step-num">4</span>
+                <div>
+                    <strong>Video Export (MP4 Download)</strong>
+                    <p>Export uses FFmpeg on the server to read the RTSP playback URL and transcode to MP4:</p>
+                    <code class="docs-code-block">ffmpeg -rtsp_transport tcp -i {rtspURL} -c:v libx264 -preset fast -crf 23 -c:a aac -movflags +faststart output.mp4</code>
+                    <p>Progress is tracked in real-time. Exports auto-delete after 30 minutes.</p>
+                </div>
+            </div>
+        </div>
+
+        <h5 class="docs-section-title">Stream Naming Convention</h5>
+        <div class="docs-section">
+            <table class="session-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Pattern</th>
+                        <th>Example</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Live Main (HD)</td>
+                        <td><code>{nvrID}_cam{channel}</code></td>
+                        <td><code>hq_office_cam1</code></td>
+                    </tr>
+                    <tr>
+                        <td>Live Sub (SD)</td>
+                        <td><code>{nvrID}_cam{channel}_sub</code></td>
+                        <td><code>hq_office_cam1_sub</code></td>
+                    </tr>
+                    <tr>
+                        <td>Playback</td>
+                        <td><code>playback_{sessionID}</code></td>
+                        <td><code>playback_a1b2c3d4</code></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h5 class="docs-section-title">Bandwidth Optimization</h5>
+        <div class="docs-section">
+            <ul>
+                <li><strong>Grid dashboards</strong> use sub-streams (SD) to reduce bandwidth across multiple cameras</li>
+                <li><strong>Live view</strong> defaults to sub-stream with an HD toggle button</li>
+                <li><strong>Snapshots</strong> prefer sub-streams for faster capture</li>
+                <li><strong>Exports</strong> respect the user's quality selection (SD or HD)</li>
+            </ul>
+        </div>
+
+        <h5 class="docs-section-title">Estimated Max Concurrent Streams</h5>
+        <div class="docs-section">
+            <p>go2rtc relays RTSP streams via WebRTC without transcoding (unless H.265 &rarr; H.264 is needed). Capacity depends on the server's network bandwidth and CPU.</p>
+            <table class="session-table">
+                <thead>
+                    <tr>
+                        <th>Stream Type</th>
+                        <th>Per-Stream BW</th>
+                        <th>Max @ 100 Mbps</th>
+                        <th>Max @ 1 Gbps</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Sub (SD)</td>
+                        <td>~0.5&ndash;1 Mbps</td>
+                        <td>~100 streams</td>
+                        <td>~500+ streams</td>
+                    </tr>
+                    <tr>
+                        <td>Main (HD)</td>
+                        <td>~4&ndash;8 Mbps</td>
+                        <td>~12&ndash;25 streams</td>
+                        <td>~125 streams</td>
+                    </tr>
+                    <tr>
+                        <td>H.265 &rarr; H.264 transcode</td>
+                        <td>~1 CPU core each</td>
+                        <td colspan="2">Limited by CPU cores (e.g., 8 cores &asymp; 8 transcodes)</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="margin-top: 12px; color: rgba(255,255,255,0.5);">
+                <strong>Current setup:</strong> {{.TotalChannels}} channels &times; 2 (main+sub) = {{multiply .TotalChannels 2}} registered streams.
+                Only streams with active viewers consume bandwidth. Grid dashboards use SD streams to minimize load.
+            </p>
+        </div>
+
+        <h5 class="docs-section-title">NVR Configuration</h5>
+        <div class="docs-section">
+            <div class="docs-info-grid">
+                <div class="docs-info-item">
+                    <span class="docs-info-label">NVRs Connected</span>
+                    <span class="docs-info-value">{{.NVRCount}}</span>
+                </div>
+                <div class="docs-info-item">
+                    <span class="docs-info-label">Total Channels</span>
+                    <span class="docs-info-value">{{.TotalChannels}}</span>
+                </div>
+                <div class="docs-info-item">
+                    <span class="docs-info-label">go2rtc Server</span>
+                    <span class="docs-info-value">{{.Go2RTCURL}}</span>
+                </div>
+                <div class="docs-info-item">
+                    <span class="docs-info-label">FFmpeg Export</span>
+                    <span class="docs-info-value">{{if .FFmpegAvailable}}Available{{else}}Not Available{{end}}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .docs-content {
+        max-width: 900px;
+    }
+    .docs-diagram {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        margin: 20px 0 30px;
+        flex-wrap: wrap;
+    }
+    .docs-node {
+        background: rgba(139, 92, 246, 0.1);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        border-radius: 12px;
+        padding: 16px 24px;
+        text-align: center;
+        min-width: 160px;
+    }
+    .docs-node-title {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #a78bfa;
+        margin-bottom: 6px;
+    }
+    .docs-node-detail {
+        font-size: 0.8rem;
+        color: rgba(255,255,255,0.5);
+    }
+    .docs-arrow {
+        padding: 0 20px;
+        color: rgba(255,255,255,0.4);
+        font-size: 0.8rem;
+        text-align: center;
+        line-height: 1.4;
+    }
+    .docs-arrow::before {
+        content: '\2192';
+        display: block;
+        font-size: 1.5rem;
+        color: #4ade80;
+    }
+    .docs-section-title {
+        color: #06b6d4;
+        margin-top: 30px;
+        margin-bottom: 15px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .docs-section {
+        color: rgba(255,255,255,0.8);
+        font-size: 0.95rem;
+        line-height: 1.6;
+    }
+    .docs-section ul {
+        margin: 8px 0;
+        padding-left: 20px;
+    }
+    .docs-section li {
+        margin-bottom: 4px;
+    }
+    .docs-step {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 20px;
+        padding: 16px;
+        background: rgba(255,255,255,0.02);
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.06);
+    }
+    .docs-step-num {
+        background: rgba(139, 92, 246, 0.2);
+        color: #a78bfa;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+    .docs-step p {
+        margin: 6px 0;
+        color: rgba(255,255,255,0.7);
+    }
+    .docs-step strong {
+        color: #fff;
+    }
+    .docs-code-block {
+        display: block;
+        background: rgba(0,0,0,0.3);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 6px;
+        padding: 8px 12px;
+        margin: 8px 0;
+        font-family: monospace;
+        font-size: 0.85rem;
+        color: #4ade80;
+        word-break: break-all;
+    }
+    .docs-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 12px;
+    }
+    .docs-info-item {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 8px;
+        padding: 12px 16px;
+    }
+    .docs-info-label {
+        display: block;
+        font-size: 0.8rem;
+        color: rgba(255,255,255,0.5);
+        margin-bottom: 4px;
+    }
+    .docs-info-value {
+        font-weight: 600;
+        color: #fff;
+        font-size: 1.1rem;
+    }
+</style>
+{{end}}

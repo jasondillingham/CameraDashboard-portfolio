@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Camera Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/theme.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-container {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 50px 40px;
+            width: 100%;
+            max-width: 420px;
+            backdrop-filter: blur(10px);
+        }
+        .login-title {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .login-title h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .login-title p {
+            font-size: 1rem;
+            opacity: 0.7;
+        }
+        .form-label {
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 500;
+        }
+        .form-control {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 12px 16px;
+            border-radius: 8px;
+        }
+        .form-control:focus {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: #22a860;
+            color: #fff;
+            box-shadow: 0 0 0 0.25rem rgba(34, 168, 96, 0.25);
+        }
+        .form-control::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            background: #22a860;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            transition: all 0.3s ease;
+        }
+        .btn-login:hover {
+            background: #1e9655;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(34, 168, 96, 0.4);
+        }
+        .btn-login:active {
+            transform: translateY(0);
+        }
+        .alert-error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: #fca5a5;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+        }
+        .login-footer {
+            text-align: center;
+            margin-top: 30px;
+            opacity: 0.5;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    {{template "version_badge.html"}}
+    <div class="login-container">
+        <div class="login-title">
+            <h1>Dashboard Login</h1>
+            <p>Sign in with your Active Directory credentials</p>
+        </div>
+
+        {{if .Error}}
+        <div class="alert-error">
+            {{.Error}}
+        </div>
+        {{end}}
+
+        <form method="POST" action="/login">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="mb-4">
+                <label for="username" class="form-label">Username</label>
+                <input type="text" class="form-control" id="username" name="username"
+                       value="{{.Username}}" placeholder="Enter your username"
+                       autocomplete="username" autocapitalize="none" autofocus required>
+            </div>
+            <div class="mb-4">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" class="form-control" id="password" name="password"
+                       placeholder="Enter your password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn-login">Sign In</button>
+        </form>
+
+        <div class="login-footer">
+            CMS Supply Dashboard
+        </div>
+    </div>
+</body>
+</html>

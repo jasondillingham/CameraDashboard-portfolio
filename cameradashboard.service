@@ -1,0 +1,18 @@
+[Unit]
+Description=Camera Dashboard web service
+After=network-online.target
+Wants=network-online.target
+
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=exec
+WorkingDirectory=/opt/cameradashboard
+ExecStart=/opt/cameradashboard/cameradashboard
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,80 @@
+{{if .User}}
+{{if .CSRFToken}}<meta name="csrf-token" content="{{.CSRFToken}}">{{end}}
+<div class="user-info">
+    {{if .IsAdmin}}
+    <a href="/admin" class="btn-admin">Admin</a>
+    {{end}}
+    <form action="/logout" method="POST" class="logout-form">
+        <button type="submit" class="btn-logout">Sign Out</button>
+    </form>
+    <span class="user-name">{{if .User.DisplayName}}{{.User.DisplayName}}{{else}}{{.User.Username}}{{end}}</span>
+    {{if .Tab}}<a href="/cameras" class="btn-back-cameras">&larr; Cameras</a>{{end}}
+</div>
+<style>
+    .user-info {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 1000;
+        padding: 10px 15px;
+        background: linear-gradient(to bottom, rgba(17,17,17,0.95) 70%, transparent);
+    }
+    .user-name {
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 0.9rem;
+    }
+    .logout-form {
+        margin: 0;
+    }
+    .btn-logout {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.7);
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .btn-logout:hover {
+        background: rgba(239, 68, 68, 0.2);
+        border-color: rgba(239, 68, 68, 0.5);
+        color: #fca5a5;
+    }
+    .btn-admin {
+        background: rgba(139, 92, 246, 0.2);
+        border: 1px solid rgba(139, 92, 246, 0.4);
+        color: #a78bfa;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+    .btn-admin:hover {
+        background: rgba(139, 92, 246, 0.3);
+        border-color: #8b5cf6;
+        color: #c4b5fd;
+    }
+    .btn-back-cameras {
+        background: rgba(59, 130, 246, 0.2);
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #60a5fa;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        margin-left: 0;
+    }
+    .btn-back-cameras:hover {
+        background: rgba(59, 130, 246, 0.3);
+        border-color: #3b82f6;
+        color: #93c5fd;
+    }
+</style>
+{{end}}

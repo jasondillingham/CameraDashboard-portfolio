@@ -1,0 +1,78 @@
+{{/* Admin Statistics Content - Shows usage analytics */}}
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="stat-card online">
+            <div class="stat-value">{{if .Stats}}{{.Stats.OnlineNow}}{{else}}0{{end}}</div>
+            <div class="stat-label">Currently Online</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card views">
+            <div class="stat-value">{{if .Stats}}{{.Stats.TodayViews}}{{else}}0{{end}}</div>
+            <div class="stat-label">Page Views Today</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card users" style="cursor: pointer;"
+             hx-get="/admin/stats/unique-users" hx-target="#admin-content" hx-swap="innerHTML"
+             onclick="document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'))">
+            <div class="stat-value">{{if .Stats}}{{.Stats.TodayUniqueUsers}}{{else}}0{{end}}</div>
+            <div class="stat-label">Unique Users Today</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Top Dashboards Today</div>
+            <div class="card-body p-0">
+                {{if and .Stats .Stats.TopDashboards}}
+                <ul class="top-list">
+                    {{range .Stats.TopDashboards}}
+                    <li>
+                        <a href="{{.Path}}" class="page-badge">{{.Path}}</a>
+                        <span class="count">{{.Count}}</span>
+                    </li>
+                    {{end}}
+                </ul>
+                {{else}}
+                <div class="text-center py-4 text-muted">
+                    <p class="mb-0">No dashboard views recorded today</p>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Top Users Today</div>
+            <div class="card-body p-0">
+                {{if and .Stats .Stats.TopUsers}}
+                <ul class="top-list">
+                    {{range .Stats.TopUsers}}
+                    <li>
+                        <span>
+                            <strong>{{if .UserName}}{{.UserName}}{{else}}{{.UserID}}{{end}}</strong>
+                            {{if and .UserName (ne .UserName .UserID)}}
+                            <span class="text-muted small">({{.UserID}})</span>
+                            {{end}}
+                        </span>
+                        <span class="count">{{.Count}}</span>
+                    </li>
+                    {{end}}
+                </ul>
+                {{else}}
+                <div class="text-center py-4 text-muted">
+                    <p class="mb-0">No user activity recorded today</p>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4 text-muted small">
+    <p class="mb-1">Statistics are based on today's access logs. Partial refreshes and API calls are excluded from counts.</p>
+    <p class="mb-0">Last updated: {{.UpdatedAt.Format "3:04:05 PM"}}</p>
+</div>

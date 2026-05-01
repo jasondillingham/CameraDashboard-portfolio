@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Camera Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/theme.css" rel="stylesheet">
+    <link href="/static/css/admin.css?v=1.3.7" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+    </style>
+</head>
+<body>
+    {{template "version_badge.html"}}
+    {{template "user_info.html" .}}
+
+    <div class="dashboard-header py-3 mb-4">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0">Admin Dashboard</h1>
+                    <div class="update-time">Last updated: {{.UpdatedAt.Format "3:04:05 PM"}}</div>
+                </div>
+                <div class="text-end">
+                    {{if .Stats}}
+                    <div class="d-flex gap-3 align-items-center">
+                        {{if .LockoutMode}}
+                        <button class="btn btn-sm" id="kill-switch-btn"
+                                onclick="killSwitch('disable')"
+                                style="background: rgba(220,38,38,0.9); border: 1px solid #dc2626; color: #fff; padding: 10px 16px; font-weight: 600; font-size: 0.8rem; animation: pulse-red 1.5s infinite;"
+                                title="Lockout is active — click to re-enable user access">
+                            LOCKED OUT &mdash; Click to Restore
+                        </button>
+                        {{else}}
+                        <button class="btn btn-sm" id="kill-switch-btn"
+                                onclick="killSwitch('enable')"
+                                style="background: rgba(220,38,38,0.15); border: 1px solid #dc2626; color: #dc2626; padding: 10px 16px; font-weight: 600; font-size: 0.8rem;"
+                                title="Log out all users, kill all streams, and block logins">
+                            Kill Switch
+                        </button>
+                        {{end}}
+                        <div class="stat-card online" style="padding: 10px 20px;">
+                            <div class="stat-value" style="font-size: 1.5rem;">{{.Stats.OnlineNow}}</div>
+                            <div class="stat-label" style="font-size: 0.75rem;">Online Now</div>
+                        </div>
+                        <div class="stat-card views" style="padding: 10px 20px;">
+                            <div class="stat-value" style="font-size: 1.5rem;">{{.Stats.TodayViews}}</div>
+                            <div class="stat-label" style="font-size: 0.75rem;">Today's Views</div>
+                        </div>
+                        <div class="stat-card users" style="padding: 10px 20px; cursor: pointer;"
+                             hx-get="/admin/stats/unique-users" hx-target="#admin-content" hx-swap="innerHTML"
+                             onclick="document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'))">
+                            <div class="stat-value" style="font-size: 1.5rem;">{{.Stats.TodayUniqueUsers}}</div>
+                            <div class="stat-label" style="font-size: 0.75rem;">Unique Users</div>
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid px-4">
+        <div class="admin-tabs">
+            <a href="#" class="admin-tab {{if eq .Tab "sessions"}}active{{end}}"
+               hx-get="/admin/sessions" hx-target="#admin-content" hx-swap="innerHTML"
+               onclick="setActiveTab(this)">Sessions</a>
+            <a href="#" class="admin-tab {{if eq .Tab "logs"}}active{{end}}"
+               hx-get="/admin/logs" hx-target="#admin-content" hx-swap="innerHTML"
+               onclick="setActiveTab(this)">Access Logs</a>
+            <a href="#" class="admin-tab {{if eq .Tab "stats"}}active{{end}}"
+               hx-get="/admin/stats" hx-target="#admin-content" hx-swap="innerHTML"
+               onclick="setActiveTab(this)">Statistics</a>
+            <a href="#" class="admin-tab {{if eq .Tab "permissions"}}active{{end}}" data-tab="permissions"
+               hx-get="/admin/permissions" hx-target="#admin-content" hx-swap="innerHTML"
+               onclick="setActiveTab(this)">Permissions</a>
+            <a href="#" class="admin-tab {{if eq .Tab "docs"}}active{{end}}"
+               hx-get="/admin/docs" hx-target="#admin-content" hx-swap="innerHTML"
+               onclick="setActiveTab(this)">Architecture</a>
+            <a href="#" class="admin-tab {{if eq .Tab "notes"}}active{{end}}"
+               hx-get="/admin/notes" hx-target="#admin-content" hx-swap="innerHTML"
+               onclick="setActiveTab(this)">Notes</a>
+        </div>
+
+        <div id="admin-content">
+            {{if eq .Tab "sessions"}}
+            {{template "admin_sessions_content.html" .}}
+            {{else if eq .Tab "logs"}}
+            {{template "admin_logs_content.html" .}}
+            {{else if eq .Tab "stats"}}
+            {{template "admin_stats_content.html" .}}
+            {{else if eq .Tab "permissions"}}
+            <div hx-get="/admin/permissions" hx-trigger="load" hx-target="this" hx-swap="innerHTML">
+                <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+            </div>
+            {{else if eq .Tab "docs"}}
+            <div hx-get="/admin/docs" hx-trigger="load" hx-target="this" hx-swap="innerHTML">
+                <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+            </div>
+            {{else if eq .Tab "notes"}}
+            <div hx-get="/admin/notes" hx-trigger="load" hx-target="this" hx-swap="innerHTML">
+                <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+            </div>
+            {{else}}
+            {{template "admin_sessions_content.html" .}}
+            {{end}}
+        </div>
+    </div>
+
+    <script>
+        function setActiveTab(el) {
+            document.querySelectorAll('.admin-tab').forEach(tab => tab.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        function killSwitch(action) {
+            var btn = document.getElementById('kill-switch-btn');
+            if (action === 'enable') {
+                if (!confirm('This will log out ALL non-admin users, kill all streams, and block logins until you restore access. Continue?')) return;
+            }
+            btn.disabled = true;
+            btn.textContent = action === 'enable' ? 'Activating...' : 'Restoring...';
+            btn.style.opacity = '0.5';
+
+            var body = new FormData();
+            body.append('action', action);
+
+            fetch('/admin/kill-switch', {method: 'POST', body: body}).then(function(r) {
+                if (r.ok) {
+                    // Reload so the button state reflects the new lockout mode
+                    // (the admin's own session was purged on enable, so they'll
+                    // hit the login page — admins can still log in during lockout)
+                    window.location.reload();
+                } else {
+                    btn.textContent = 'Failed';
+                    btn.disabled = false;
+                    btn.style.opacity = '';
+                }
+            }).catch(function() {
+                btn.textContent = 'Failed';
+                btn.disabled = false;
+                btn.style.opacity = '';
+            });
+        }
+
+        // Auto-refresh sessions every 30 seconds
+        setInterval(function() {
+            const activeTab = document.querySelector('.admin-tab.active');
+            if (activeTab && activeTab.textContent.trim() === 'Sessions') {
+                htmx.ajax('GET', '/admin/sessions', {target: '#admin-content', swap: 'innerHTML'});
+            }
+        }, 30000);
+    </script>
+    {{template "auto_reload.html"}}
+</body>
+</html>
